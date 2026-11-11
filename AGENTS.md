@@ -28,3 +28,5 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+The Buildicy Team Hub stays a single-route frontend prototype with workspace features modularized under `src/components/team-hub` and local mock state, so no backend is required.
