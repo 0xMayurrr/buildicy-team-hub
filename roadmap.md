@@ -1,3 +1,3 @@
 - [x] Build the Buildicy Team Hub workspace and mock-only interactions.
-- [ ] Verify routing, lead creation, navigation, chat, and page rendering.
-- [ ] Check the updated preview diagnostics and complete the routing regression test.
+- [x] Verify routing, lead creation, navigation, chat, and page rendering.
+- [x] Check the updated preview diagnostics and complete the routing regression test.
