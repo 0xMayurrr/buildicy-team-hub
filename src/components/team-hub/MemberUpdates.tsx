@@ -219,7 +219,7 @@ export function MemberUpdates({ currentUser }: MemberUpdatesProps) {
           <Textarea
             required
             rows={2}
-            placeholder="e.g. Conducted 14 outreach emails, booked 2 intro calls with SaaS founders, closed qualification for Acme Corp."
+            placeholder="e.g. Conducted 14 outreach emails, booked 2 intro calls with prospective clients, closed qualified lead."
             value={achievements}
             onChange={(e) => setAchievements(e.target.value)}
           />

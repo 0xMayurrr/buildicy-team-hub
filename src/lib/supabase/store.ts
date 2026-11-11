@@ -8,6 +8,7 @@ import type {
   LeadActivity,
   LeadDiscussion,
   ChatMessage,
+  ChatChannel,
   NotificationItem,
   DailyTask,
   WorkingStatus,
@@ -41,6 +42,7 @@ export const CREDENTIALS: Record<
     color: "avatar-lilac",
     title: "Founder & CEO",
     workingStatus: "Outreach",
+    avatarUrl: "",
   },
   "ganesh.marketing@buildicy.com": {
     pass: "GaneshBuildicy@2026",
@@ -152,12 +154,31 @@ export const INITIAL_TASKS: Record<string, DailyTask[]> = {};
 
 // Automatic one-time wipe of old mock data in client browser
 if (typeof window !== "undefined") {
-  localStorage.removeItem("buildicy_tasks");
-  const isFreshV6 = localStorage.getItem("buildicy_fresh_v6");
-  if (!isFreshV6) {
-    localStorage.removeItem("buildicy_chat");
-    localStorage.removeItem("buildicy_channels");
-    localStorage.setItem("buildicy_fresh_v6", "true");
+  const isFresh = localStorage.getItem("buildicy_fresh_v16_clean_slate");
+  if (!isFresh) {
+    [
+      "buildicy_tasks",
+      "buildicy_chat",
+      "buildicy_channels",
+      "buildicy_leads",
+      "buildicy_activities",
+      "buildicy_outreach",
+      "buildicy_daily_updates",
+      "buildicy_notifications",
+      "buildicy_discussions",
+      "buildicy_fresh_v7",
+    ].forEach((k) => localStorage.removeItem(k));
+    localStorage.setItem("buildicy_leads", JSON.stringify([]));
+    localStorage.setItem("buildicy_activities", JSON.stringify([]));
+    localStorage.setItem("buildicy_outreach", JSON.stringify([]));
+    localStorage.setItem("buildicy_daily_updates", JSON.stringify([]));
+    localStorage.setItem("buildicy_notifications", JSON.stringify([]));
+    localStorage.setItem("buildicy_discussions", JSON.stringify({}));
+    localStorage.setItem("buildicy_tasks", JSON.stringify({}));
+    localStorage.setItem("buildicy_chat", JSON.stringify({}));
+    localStorage.setItem("buildicy_channels", JSON.stringify([]));
+    localStorage.setItem("buildicy_users", JSON.stringify(INITIAL_USERS));
+    localStorage.setItem("buildicy_fresh_v16_clean_slate", "true");
   }
 }
 
@@ -171,7 +192,7 @@ export const CookieAuth = {
   get: (name: string): string | null => {
     if (typeof document === "undefined") return null;
     const match = document.cookie.match(new RegExp("(^|; )" + name + "=([^;]*)"));
-    return match ? decodeURIComponent(match[2]) : null;
+    return match && match[2] ? decodeURIComponent(match[2]) : null;
   },
   remove: (name: string) => {
     if (typeof document === "undefined") return;
@@ -293,13 +314,44 @@ export const HubStore = {
     HubStore.setCurrentUser(null);
   },
 
+  resetToCleanSlate: () => {
+    if (typeof window !== "undefined") {
+      [
+        "buildicy_tasks",
+        "buildicy_chat",
+        "buildicy_channels",
+        "buildicy_leads",
+        "buildicy_activities",
+        "buildicy_outreach",
+        "buildicy_daily_updates",
+        "buildicy_notifications",
+        "buildicy_discussions",
+      ].forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem("buildicy_leads", JSON.stringify([]));
+      localStorage.setItem("buildicy_activities", JSON.stringify([]));
+      localStorage.setItem("buildicy_outreach", JSON.stringify([]));
+      localStorage.setItem("buildicy_daily_updates", JSON.stringify([]));
+      localStorage.setItem("buildicy_notifications", JSON.stringify([]));
+      localStorage.setItem("buildicy_discussions", JSON.stringify({}));
+      localStorage.setItem("buildicy_tasks", JSON.stringify({}));
+      localStorage.setItem("buildicy_chat", JSON.stringify({}));
+      localStorage.setItem("buildicy_channels", JSON.stringify([]));
+      localStorage.setItem("buildicy_users", JSON.stringify(INITIAL_USERS));
+      localStorage.setItem("buildicy_fresh_v16_clean_slate", "true");
+      window.dispatchEvent(new Event("buildicy_storage_update"));
+    }
+  },
+
   // Pull real remote data from Supabase PostgreSQL tables
   syncFromSupabase: async () => {
     const config = getSupabaseConfig();
     if (!config.isConfigured) return;
 
     try {
-      const remoteLeads = await supabase.select<any>("leads", "order=created_at.desc");
+      const withTimeout = <T>(p: Promise<T | null>): Promise<T | null> =>
+        Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), 5000))]);
+
+      const remoteLeads = await withTimeout(supabase.select<any>("leads", "order=created_at.desc") as Promise<any[]>);
       if (remoteLeads) {
         const mapped: Lead[] = remoteLeads.map((r: any) => ({
           id: r.id,
@@ -325,7 +377,7 @@ export const HubStore = {
         setStored("buildicy_leads", mapped);
       }
 
-      const remoteActivities = await supabase.select<any>("lead_activities", "order=created_at.desc&limit=50");
+      const remoteActivities = await withTimeout(supabase.select<any>("lead_activities", "order=created_at.desc&limit=50") as Promise<any[]>);
       if (remoteActivities) {
         const mappedAct: LeadActivity[] = remoteActivities.map((a: any) => ({
           id: a.id,
@@ -344,7 +396,7 @@ export const HubStore = {
         setStored("buildicy_activities", mappedAct);
       }
 
-      const remoteOutreach = await supabase.select<any>("lead_outreach", "order=created_at.desc&limit=200");
+      const remoteOutreach = await withTimeout(supabase.select<any>("lead_outreach", "order=created_at.desc&limit=200") as Promise<any[]>);
       if (remoteOutreach) {
         const mappedOutreach: LeadOutreachInteraction[] = remoteOutreach.map((o: any) => ({
           id: o.id,
@@ -364,7 +416,7 @@ export const HubStore = {
         setStored("buildicy_outreach", mappedOutreach);
       }
 
-      const remoteDaily = await supabase.select<any>("daily_work_updates", "order=created_at.desc&limit=100");
+      const remoteDaily = await withTimeout(supabase.select<any>("daily_work_updates", "order=created_at.desc&limit=100") as Promise<any[]>);
       if (remoteDaily) {
         const mappedDaily: DailyWorkUpdate[] = remoteDaily.map((d: any) => ({
           id: d.id,
@@ -393,7 +445,7 @@ export const HubStore = {
         setStored("buildicy_daily_updates", mappedDaily);
       }
 
-      const remoteChannels = await supabase.select<any>("chat_channels", "order=created_at.asc");
+      const remoteChannels = await withTimeout(supabase.select<any>("chat_channels", "order=created_at.asc") as Promise<any[]>);
       if (remoteChannels && remoteChannels.length > 0) {
         const legacyMockNames = ["marketing", "sales-team", "wins", "general"];
         const mappedChannels: ChatChannel[] = remoteChannels
@@ -410,7 +462,7 @@ export const HubStore = {
         setStored("buildicy_channels", mappedChannels);
       }
 
-      const remoteMessages = await supabase.select<any>("chat_messages", "order=created_at.asc&limit=300");
+      const remoteMessages = await withTimeout(supabase.select<any>("chat_messages", "order=created_at.asc&limit=300") as Promise<any[]>);
       if (remoteMessages && remoteMessages.length > 0) {
         const chatMap: Record<string, ChatMessage[]> = {};
         remoteMessages.forEach((m: any) => {
@@ -485,7 +537,19 @@ export const HubStore = {
   },
 
   getLeads: (): Lead[] => {
-    return getStored<Lead[]>("buildicy_leads", INITIAL_LEADS);
+    const list = getStored<Lead[]>("buildicy_leads", INITIAL_LEADS);
+    const mockLeadIds = ["LD-2408", "LD-2407", "LD-2406", "LD-2405", "LD-2404", "LD-2403", "LD-2402", "LD-2401"];
+    const mockCompanies = ["layers studio", "circooles", "catalog", "quotient", "sisyphus", "hourglass", "bloom labs", "fable & co.", "acme corp", "acme"];
+    const filtered = list.filter((l) => {
+      if (!l || !l.id) return false;
+      if (mockLeadIds.includes(l.id) || l.id.startsWith("LD-240")) return false;
+      if (mockCompanies.includes((l.company || "").toLowerCase().trim())) return false;
+      return true;
+    });
+    if (filtered.length !== list.length) {
+      setStored("buildicy_leads", filtered);
+    }
+    return filtered;
   },
 
   addLead: (leadData: Omit<Lead, "id" | "createdAt" | "updated">): Lead => {
@@ -658,10 +722,34 @@ export const HubStore = {
 
   getActivities: (leadId?: string): LeadActivity[] => {
     const all = getStored<LeadActivity[]>("buildicy_activities", INITIAL_ACTIVITIES);
-    if (leadId) {
-      return all.filter((a) => a.leadId === leadId);
+    const mockLeadIds = ["LD-2408", "LD-2407", "LD-2406", "LD-2405", "LD-2404", "LD-2403", "LD-2402", "LD-2401"];
+    const mockNames = [
+      "sofia chen",
+      "alex morgan",
+      "jordan lee",
+      "phoenix baker",
+      "olivia rhye",
+      "candice wu",
+      "lana steiner",
+      "demi wilkinson",
+      "natali craig",
+      "drew cano",
+      "orlando diggs",
+    ];
+    const filtered = all.filter((a) => {
+      if (!a) return false;
+      if (mockLeadIds.includes(a.leadId) || String(a.leadId).startsWith("LD-240")) return false;
+      if (mockNames.includes((a.person || "").toLowerCase())) return false;
+      if (mockNames.includes((a.subject || "").toLowerCase())) return false;
+      return true;
+    });
+    if (filtered.length !== all.length) {
+      setStored("buildicy_activities", filtered);
     }
-    return all;
+    if (leadId) {
+      return filtered.filter((a) => a.leadId === leadId);
+    }
+    return filtered;
   },
 
   addActivity: (act: Omit<LeadActivity, "id" | "createdAt">) => {
@@ -688,12 +776,17 @@ export const HubStore = {
   // ==========================================
   // OUTREACH INTERACTION HISTORY
   // ==========================================
-  getOutreach: (leadId?: string): LeadOutreachInteraction[] => {
+  getOutreach: (filter?: string | { leadId?: string; userId?: string }): LeadOutreachInteraction[] => {
     const all = getStored<LeadOutreachInteraction[]>("buildicy_outreach", INITIAL_OUTREACH);
-    if (leadId) {
-      return all.filter((o) => o.leadId === leadId);
+    if (!filter) return all;
+    if (typeof filter === "string") {
+      return all.filter((o) => o.leadId === filter);
     }
-    return all;
+    return all.filter((o) => {
+      if (filter.leadId && o.leadId !== filter.leadId) return false;
+      if (filter.userId && o.userId !== filter.userId) return false;
+      return true;
+    });
   },
 
   addOutreach: (
@@ -792,7 +885,7 @@ export const HubStore = {
     const now = new Date().toISOString();
     const newUpdate: DailyWorkUpdate = {
       ...data,
-      id: existingIdx >= 0 ? all[existingIdx].id : `update-${Date.now()}`,
+      id: existingIdx >= 0 && all[existingIdx] ? all[existingIdx]!.id : `update-${Date.now()}`,
       date: today,
       createdAt: now,
     };
@@ -852,7 +945,7 @@ export const HubStore = {
     timeframe: "today" | "week" | "month" | "all" = "all",
   ): MemberPerformanceMetrics => {
     const users = HubStore.getUsers();
-    const member = users.find((u) => u.id === userId) || INITIAL_USERS[0];
+    const member: UserProfile = users.find((u) => u.id === userId) || INITIAL_USERS[0]!;
     const leads = HubStore.getLeads();
     const outreach = HubStore.getOutreach();
     const dailyUpdates = HubStore.getDailyUpdates(userId);

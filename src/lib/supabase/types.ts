@@ -20,10 +20,10 @@ export interface UserProfile {
   initials: string;
   color: string;
   activeStatus: string;
-  workingStatus?: WorkingStatus;
-  statusUpdatedAt?: string;
-  avatarUrl?: string;
-  avatarChosen?: boolean;
+  workingStatus?: WorkingStatus | undefined;
+  statusUpdatedAt?: string | undefined;
+  avatarUrl?: string | undefined;
+  avatarChosen?: boolean | undefined;
 }
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Proposal" | "Won" | "Lost";
@@ -47,7 +47,7 @@ export interface Lead {
   createdAt: string;
   qualityPotential?: LeadPotential;
   promisingReason?: string;
-  nextFollowupDate?: string;
+  nextFollowupDate?: string | undefined;
   lastOutreachAt?: string;
   lastOutreachChannel?: string;
 }
@@ -76,7 +76,7 @@ export interface LeadOutreachInteraction {
   prospectResponse: ProspectResponse;
   isPositive: boolean;
   statusAtTime: LeadStatus;
-  nextFollowupDate?: string;
+  nextFollowupDate?: string | undefined;
   createdAt: string;
 }
 
@@ -205,6 +205,6 @@ export interface MemberPerformanceMetrics {
   followupCompletionRatePct: number;
   wonValue: number;
   pipelineValue: number;
-  lastOutreachTimestamp?: string;
-  lastUpdateTimestamp?: string;
+  lastOutreachTimestamp?: string | undefined;
+  lastUpdateTimestamp?: string | undefined;
 }

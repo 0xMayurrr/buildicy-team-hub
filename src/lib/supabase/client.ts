@@ -11,11 +11,12 @@ export interface SupabaseConfig {
 }
 
 export const getSupabaseConfig = (): SupabaseConfig => {
-  const url = (import.meta.env.VITE_SUPABASE_URL || "").trim().replace(/\/$/, "");
+  const env = import.meta.env as Record<string, string | undefined>;
+  const url = (env["VITE_SUPABASE_URL"] || "").trim().replace(/\/$/, "");
   const anonKey = (
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    import.meta.env.VITE_SUPABASE_ANON_KEY ||
-    import.meta.env.VITE_SUPABASE_KEY ||
+    env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    env["VITE_SUPABASE_ANON_KEY"] ||
+    env["VITE_SUPABASE_KEY"] ||
     ""
   ).trim();
   return {
@@ -146,6 +147,21 @@ export class SupabaseClient {
     } catch (err) {
       console.warn(`Supabase update error on ${table}:`, err);
       return null;
+    }
+  }
+
+  // Supabase PostgREST: Delete record
+  public async delete(table: string, filterQuery: string): Promise<boolean> {
+    if (!this.config.isConfigured) return false;
+    try {
+      const res = await fetch(`${this.config.url}/rest/v1/${table}?${filterQuery}`, {
+        method: "DELETE",
+        headers: this.getHeaders(),
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn(`Supabase delete error on ${table}:`, err);
+      return false;
     }
   }
 }

@@ -50,7 +50,7 @@ export function AvatarPickerModal({
   onSelectSuccess,
 }: AvatarPickerModalProps) {
   const [selectedUrl, setSelectedUrl] = useState<string>(
-    currentUser?.avatarUrl || AVATAR_OPTIONS[0].url,
+    currentUser?.avatarUrl || AVATAR_OPTIONS[0]?.url || "",
   );
   const [isSaving, setIsSaving] = useState(false);
 

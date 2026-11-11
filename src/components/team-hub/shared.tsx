@@ -17,9 +17,9 @@ export function Avatar({
   avatarUrl,
 }: {
   initials: string;
-  color?: string;
-  size?: "sm" | "md" | "lg";
-  avatarUrl?: string;
+  color?: string | undefined;
+  size?: "sm" | "md" | "lg" | undefined;
+  avatarUrl?: string | undefined;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
 

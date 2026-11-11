@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Clock,
   Award,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,7 @@ export function TeamHubApp() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (leads.length > 0 && !selectedId) {
+    if (leads.length > 0 && leads[0] && !selectedId) {
       setSelectedId(leads[0].id);
     }
   }, [leads, selectedId]);
@@ -381,6 +382,18 @@ export function TeamHubApp() {
                     <DropdownMenuItem onClick={() => go("reports")}>Reports & KPIs</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => go("leads")}>All leads</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => go("team")}>Team management</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (confirm("Reset workspace to completely clean fresh slate (0 leads, 0 mock data)?")) {
+                          HubStore.resetToCleanSlate();
+                          toast.success("Workspace reset to 100% clean fresh slate!");
+                        }
+                      }}
+                      style={{ color: "oklch(0.65 0.2 25)" }}
+                    >
+                      <Trash2 style={{ width: "14px", height: "14px", marginRight: "6px" }} />
+                      Reset to Clean Workspace
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
                 )}
@@ -475,7 +488,9 @@ export function TeamHubApp() {
       )}
 
       {/* Gemini AI Agent */}
-      {mounted && currentUser && <GeminiAgent currentUser={currentUser} />}
+      {mounted && currentUser && (
+        <GeminiAgent currentUser={currentUser} onOpenLead={openLead} onNavigate={go} />
+      )}
 
       {/* Cookie consent */}
       {mounted && <CookieBanner />}
@@ -689,7 +704,7 @@ function FounderDashboard({
           />
           <div className="bar-chart">
             {weekDays.map((dayName, i) => {
-              const count = weekCounts[i];
+              const count = weekCounts[i] ?? 0;
               const heightPct = count > 0 ? Math.max(16, Math.round((count / maxActivity) * 100)) : 8;
               const isToday = i === currentDayIdx;
               const isPeak = count === maxActivity && count > 0;
@@ -938,7 +953,7 @@ function MemberDashboard({
                     }}
                   >
                     <span>
-                      <strong>{o.channel}</strong> · {o.leadName}
+                      <strong>{o.channel}</strong> · {leads.find((l) => l.id === o.leadId)?.name || "Lead"}
                     </span>
                     <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
                       {o.statusAtTime}
@@ -1183,7 +1198,7 @@ function AddLeadDialog({
       try {
         const text = e.target?.result as string;
         const lines = text.split(/\r?\n/).filter(Boolean);
-        if (lines.length < 2) { toast.error("File has no data rows."); setImporting(false); return; }
+        if (lines.length < 2 || !lines[0]) { toast.error("File has no data rows."); setImporting(false); return; }
         const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
         const nameIdx = headers.findIndex((h) => h.includes("name"));
         const companyIdx = headers.findIndex((h) => h.includes("company"));
@@ -1194,14 +1209,16 @@ function AddLeadDialog({
         if (nameIdx === -1) { toast.error("CSV must have a 'name' column."); setImporting(false); return; }
         let count = 0;
         for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+          const lineStr = lines[i];
+          if (!lineStr) continue;
+          const cols = lineStr.split(",").map((c) => c.replace(/^"|"$/g, "").trim());
           const name = cols[nameIdx];
           if (!name) continue;
           const assignedUser = users.find((u) => u.id === selectedOwnerId) ?? currentUser;
           const newLead = HubStore.addLead({
             name,
-            company: companyIdx >= 0 ? cols[companyIdx] || "Independent" : "Independent",
-            email: emailIdx >= 0 ? cols[emailIdx] || "hello@example.com" : "hello@example.com",
+            company: companyIdx >= 0 && cols[companyIdx] ? cols[companyIdx]! : "Independent",
+            email: emailIdx >= 0 && cols[emailIdx] ? cols[emailIdx]! : "",
             phone: phoneIdx >= 0 ? cols[phoneIdx] || "Not added" : "Not added",
             source: sourceIdx >= 0 ? cols[sourceIdx] || "Import" : "Import",
             value: valueIdx >= 0 ? Number(cols[valueIdx]) || 0 : 0,

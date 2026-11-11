@@ -68,8 +68,8 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
 
   // Active channel/DM state
   const [active, setActive] = useState<string>(() => {
-    if (visibleChannels.length > 0) return visibleChannels[0].id;
-    if (dmContacts.length > 0) return dmContacts[0].id;
+    if (visibleChannels.length > 0 && visibleChannels[0]) return visibleChannels[0].id;
+    if (dmContacts.length > 0 && dmContacts[0]) return dmContacts[0].id;
     return "";
   });
 
@@ -78,9 +78,9 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
     const isValidGroup = visibleChannels.some((c) => c.id === active);
     const isValidDm = dmContacts.some((d) => d.id === active);
     if (!isValidGroup && !isValidDm) {
-      if (visibleChannels.length > 0) {
+      if (visibleChannels.length > 0 && visibleChannels[0]) {
         setActive(visibleChannels[0].id);
-      } else if (dmContacts.length > 0) {
+      } else if (dmContacts.length > 0 && dmContacts[0]) {
         setActive(dmContacts[0].id);
       }
     }
@@ -104,6 +104,12 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
   const currentGroup = visibleChannels.find((c) => c.id === active);
   const currentDm = dmContacts.find((d) => d.id === active);
   const messages = active ? HubStore.getChat(active) : [];
+
+  // Active verified members in group channel
+  const activeGroupMembers = useMemo(() => {
+    if (!currentGroup || !Array.isArray(currentGroup.memberIds)) return [];
+    return users.filter((u) => currentGroup.memberIds.includes(u.id));
+  }, [currentGroup, users]);
 
   const handleSendMessage = (text: string) => {
     if (!active || !text.trim()) return;
@@ -140,7 +146,7 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
       HubStore.deleteChannel(channelId);
       setChannels(HubStore.getChannels());
       toast.success(`Group #${name} removed.`);
-      if (dmContacts.length > 0) {
+      if (dmContacts.length > 0 && dmContacts[0]) {
         setActive(dmContacts[0].id);
       }
     }
@@ -332,21 +338,18 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
                     <Hash size={18} />
                   </span>
                   <div className="avatar-stack" style={{ padding: 0 }}>
-                    {users
-                      .filter((u) => currentGroup.memberIds.includes(u.id))
-                      .slice(0, 4)
-                      .map((gm) => (
-                        <Avatar
-                          key={gm.id}
-                          initials={gm.initials}
-                          color={gm.color}
-                          avatarUrl={gm.avatarUrl}
-                          size="sm"
-                        />
-                      ))}
-                    {currentGroup.memberIds.length > 4 && (
+                    {activeGroupMembers.slice(0, 4).map((gm) => (
+                      <Avatar
+                        key={gm.id}
+                        initials={gm.initials}
+                        color={gm.color}
+                        avatarUrl={gm.avatarUrl}
+                        size="sm"
+                      />
+                    ))}
+                    {activeGroupMembers.length > 4 && (
                       <span style={{ width: "26px", height: "26px", fontSize: "9px" }}>
-                        +{currentGroup.memberIds.length - 4}
+                        +{activeGroupMembers.length - 4}
                       </span>
                     )}
                   </div>
@@ -371,8 +374,8 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
                 <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
                   {currentGroup
                     ? currentGroup.description
-                      ? `${currentGroup.description} · ${currentGroup.memberIds.length} members`
-                      : `${currentGroup.memberIds.length} members in this group`
+                      ? `${currentGroup.description} · ${activeGroupMembers.length} members`
+                      : `${activeGroupMembers.length} members in this group`
                     : currentDm
                     ? `${currentDm.member.title} (${currentDm.member.email})`
                     : "No conversation selected"}

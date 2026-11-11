@@ -381,7 +381,7 @@ export function ReportsView({ leads, openLead, currentUser }: ReportsViewProps) 
             {funnelSteps.map((step, idx) => {
               const safeCount = Number(step.count) || 0;
               const pct = funnelMax > 0 ? Math.max(12, Math.round((safeCount / funnelMax) * 100)) : 12;
-              const prevCount = idx > 0 ? Number(funnelSteps[idx - 1].count) || 0 : safeCount;
+              const prevCount = idx > 0 && funnelSteps[idx - 1] ? Number(funnelSteps[idx - 1]!.count) || 0 : safeCount;
               const conversionFromPrev = prevCount > 0 ? Math.round((safeCount / prevCount) * 100) : 0;
               return (
                 <div key={step.label} className="funnel-step">
