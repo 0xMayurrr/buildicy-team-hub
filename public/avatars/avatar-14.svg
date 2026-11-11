@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- 3D Skin Radial Gradient (Highlight top-left, depth bottom-right) -->
+    <radialGradient id="sk-avatar-14" cx="44%" cy="40%" r="56%" fx="38%" fy="32%">
+      <stop offset="0%" stop-color="#E5B08C" />
+      <stop offset="65%" stop-color="#C4885F" />
+      <stop offset="100%" stop-color="#9F6339" />
+    </radialGradient>
+
+    <!-- 3D Hair Shading -->
+    <linearGradient id="hr-avatar-14" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3F3330" />
+      <stop offset="100%" stop-color="#201A18" />
+    </linearGradient>
+
+    <!-- 3D Depth Shadow Filter -->
+    <filter id="sh-avatar-14" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- ================= HAIR BACK LAYER (Mass behind head) ================= -->
+  
+  
+  
+  
+  
+
+  <!-- ================= NECK & EARS ================= -->
+  <path d="M41 72 L41 94 C41 97, 59 97, 59 94 L59 72 Z" fill="#9F6339" />
+  <path d="M42 72 C46 79, 54 79, 58 72 Z" fill="#9F6339" opacity="0.6" />
+
+  <!-- Left Ear -->
+  <ellipse cx="23" cy="53" rx="5.5" ry="8" fill="#C4885F" />
+  <ellipse cx="24" cy="53" rx="3.5" ry="5.5" fill="#9F6339" />
+  <!-- Right Ear -->
+  <ellipse cx="77" cy="53" rx="5.5" ry="8" fill="#C4885F" />
+  <ellipse cx="76" cy="53" rx="3.5" ry="5.5" fill="#9F6339" />
+  
+
+  <!-- ================= HEAD BASE ================= -->
+  <path d="M26 44 C26 22, 74 22, 74 44 C74 66, 66 82, 50 82 C34 82, 26 66, 26 44 Z" fill="url(#sk-avatar-14)" filter="url(#sh-avatar-14)" />
+
+  <!-- Cheeks Blush -->
+  <ellipse cx="34" cy="58" rx="6" ry="4" fill="#EF4444" opacity="0.14" />
+  <ellipse cx="66" cy="58" rx="6" ry="4" fill="#EF4444" opacity="0.14" />
+
+  <!-- Eyebrows -->
+  <path d="M33 43 Q40 38 46 41" stroke="#201A18" stroke-width="2.8" stroke-linecap="round" fill="none" />
+  <path d="M54 41 Q60 38 67 43" stroke="#201A18" stroke-width="2.8" stroke-linecap="round" fill="none" />
+
+  <!-- 3D Big Glossy Eyes -->
+  <g>
+    <!-- Left Eye -->
+    <ellipse cx="40" cy="49" rx="4.8" ry="5.4" fill="#18181B" />
+    <circle cx="41.5" cy="47.5" r="1.8" fill="#FFFFFF" />
+    <circle cx="39" cy="50.8" r="0.9" fill="#FFFFFF" opacity="0.75" />
+    <!-- Right Eye -->
+    <ellipse cx="60" cy="49" rx="4.8" ry="5.4" fill="#18181B" />
+    <circle cx="61.5" cy="47.5" r="1.8" fill="#FFFFFF" />
+    <circle cx="59" cy="50.8" r="0.9" fill="#FFFFFF" opacity="0.75" />
+  </g>
+
+  <!-- 3D Nose -->
+  <g>
+    <path d="M49 46 L49 57 Q49 60 52 60" stroke="#9F6339" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7" />
+    <ellipse cx="50" cy="59.5" rx="3.5" ry="1.6" fill="#9F6339" opacity="0.45" />
+    <circle cx="49" cy="58" r="0.8" fill="#FFFFFF" opacity="0.25" />
+  </g>
+
+  <!-- 3D Smile -->
+  <g>
+    <path d="M42 67 Q50 75 58 67" stroke="#9F6339" stroke-width="2.6" stroke-linecap="round" fill="none" />
+    <path d="M45 67.5 Q50 72.5 55 67.5" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" fill="none" opacity="0.85" />
+  </g>
+
+  <!-- Facial Hair -->
+  
+    <path d="M29 52 C29 76, 39 83, 50 83 C61 83, 71 76, 71 52 C71 58, 64 64, 58 64 C56 64, 54 62, 50 62 C46 62, 44 64, 42 64 C36 64, 29 58, 29 52 Z" fill="#201A18" opacity="0.94" />
+    <path d="M40 64 Q50 61 60 64 Q50 66 40 64 Z" fill="#201A18" />
+  
+  
+
+  <!-- Glasses -->
+  
+  
+
+  <!-- ================= HAIR FRONT & TOP LAYER (100% Full Hair Coverage) ================= -->
+  
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    <!-- Thick Hair with Backward Red Cap -->
+    <path d="M22 42 C18 55, 20 68, 28 72 C30 62, 30 50, 28 42 Z" fill="url(#hr-avatar-14)" />
+    <path d="M78 42 C82 55, 80 68, 72 72 C70 62, 70 50, 72 42 Z" fill="url(#hr-avatar-14)" />
+    <path d="M32 38 C42 36, 58 36, 68 38" stroke="#201A18" stroke-width="4" stroke-linecap="round" fill="none" />
+    <!-- Backward Red Cap Dome -->
+    <path d="M23 37 C23 16, 77 16, 77 37 C77 41, 23 41, 23 37 Z" fill="#EF4444" filter="url(#sh-avatar-14)" />
+    <!-- Backward Strap / Visor -->
+    <path d="M22 37 C22 33, 78 33, 78 37 C78 41, 22 41, 22 37 Z" fill="#DC2626" />
+    <ellipse cx="50" cy="18" rx="3.5" ry="1.8" fill="#B91C1C" />
+  
+
+  
+
+  
+</svg>

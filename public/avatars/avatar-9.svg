@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- 3D Skin Radial Gradient (Highlight top-left, depth bottom-right) -->
+    <radialGradient id="sk-avatar-9" cx="44%" cy="40%" r="56%" fx="38%" fy="32%">
+      <stop offset="0%" stop-color="#FCE1D0" />
+      <stop offset="65%" stop-color="#E2B299" />
+      <stop offset="100%" stop-color="#BE866A" />
+    </radialGradient>
+
+    <!-- 3D Hair Shading -->
+    <linearGradient id="hr-avatar-9" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7E22CE" />
+      <stop offset="100%" stop-color="#581C87" />
+    </linearGradient>
+
+    <!-- 3D Depth Shadow Filter -->
+    <filter id="sh-avatar-9" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- ================= HAIR BACK LAYER (Mass behind head) ================= -->
+  
+  
+    <!-- Full Bob Hair Back & Sides -->
+    <path d="M18 36 C13 55, 14 78, 28 85 C32 75, 33 62, 33 48 Z" fill="url(#hr-avatar-9)" />
+    <path d="M82 36 C87 55, 86 78, 72 85 C68 75, 67 62, 67 48 Z" fill="url(#hr-avatar-9)" />
+  
+  
+  
+  
+
+  <!-- ================= NECK & EARS ================= -->
+  <path d="M41 72 L41 94 C41 97, 59 97, 59 94 L59 72 Z" fill="#BE866A" />
+  <path d="M42 72 C46 79, 54 79, 58 72 Z" fill="#BE866A" opacity="0.6" />
+
+  <!-- Left Ear -->
+  <ellipse cx="23" cy="53" rx="5.5" ry="8" fill="#E2B299" />
+  <ellipse cx="24" cy="53" rx="3.5" ry="5.5" fill="#BE866A" />
+  <!-- Right Ear -->
+  <ellipse cx="77" cy="53" rx="5.5" ry="8" fill="#E2B299" />
+  <ellipse cx="76" cy="53" rx="3.5" ry="5.5" fill="#BE866A" />
+  
+    <circle cx="23" cy="59" r="2.2" fill="#FBBF24" stroke="#D97706" stroke-width="0.6" />
+    <circle cx="77" cy="59" r="2.2" fill="#FBBF24" stroke="#D97706" stroke-width="0.6" />
+  
+
+  <!-- ================= HEAD BASE ================= -->
+  <path d="M26 44 C26 22, 74 22, 74 44 C74 66, 66 82, 50 82 C34 82, 26 66, 26 44 Z" fill="url(#sk-avatar-9)" filter="url(#sh-avatar-9)" />
+
+  <!-- Cheeks Blush -->
+  <ellipse cx="34" cy="58" rx="6" ry="4" fill="#EF4444" opacity="0.14" />
+  <ellipse cx="66" cy="58" rx="6" ry="4" fill="#EF4444" opacity="0.14" />
+
+  <!-- Eyebrows -->
+  <path d="M33 43 Q40 38 46 41" stroke="#581C87" stroke-width="2.8" stroke-linecap="round" fill="none" />
+  <path d="M54 41 Q60 38 67 43" stroke="#581C87" stroke-width="2.8" stroke-linecap="round" fill="none" />
+
+  <!-- 3D Big Glossy Eyes -->
+  <g>
+    <!-- Left Eye -->
+    <ellipse cx="40" cy="49" rx="4.8" ry="5.4" fill="#18181B" />
+    <circle cx="41.5" cy="47.5" r="1.8" fill="#FFFFFF" />
+    <circle cx="39" cy="50.8" r="0.9" fill="#FFFFFF" opacity="0.75" />
+    <!-- Right Eye -->
+    <ellipse cx="60" cy="49" rx="4.8" ry="5.4" fill="#18181B" />
+    <circle cx="61.5" cy="47.5" r="1.8" fill="#FFFFFF" />
+    <circle cx="59" cy="50.8" r="0.9" fill="#FFFFFF" opacity="0.75" />
+  </g>
+
+  <!-- 3D Nose -->
+  <g>
+    <path d="M49 46 L49 57 Q49 60 52 60" stroke="#BE866A" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7" />
+    <ellipse cx="50" cy="59.5" rx="3.5" ry="1.6" fill="#BE866A" opacity="0.45" />
+    <circle cx="49" cy="58" r="0.8" fill="#FFFFFF" opacity="0.25" />
+  </g>
+
+  <!-- 3D Smile -->
+  <g>
+    <path d="M42 67 Q50 75 58 67" stroke="#BE866A" stroke-width="2.6" stroke-linecap="round" fill="none" />
+    <path d="M45 67.5 Q50 72.5 55 67.5" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" fill="none" opacity="0.85" />
+  </g>
+
+  <!-- Facial Hair -->
+  
+  
+
+  <!-- Glasses -->
+  
+  
+
+  <!-- ================= HAIR FRONT & TOP LAYER (100% Full Hair Coverage) ================= -->
+  
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    <!-- Chic Sleek Bob with Fringe -->
+    <path d="M20 42 C18 17, 32 9, 50 9 C68 9, 82 17, 80 42 C80 58, 76 72, 71 75 C68 62, 69 45, 68 34 C58 34, 42 34, 32 34 C31 45, 32 62, 29 75 C24 72, 20 58, 20 42 Z" fill="url(#hr-avatar-9)" filter="url(#sh-avatar-9)" />
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+</svg>

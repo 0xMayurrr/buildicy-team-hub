@@ -37,11 +37,21 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
+  console.error("Root boundary caught error:", error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  const handleResetSession = () => {
+    try {
+      if (typeof window !== "undefined") {
+        document.cookie = "buildicy_session_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        localStorage.removeItem("buildicy_auth_user");
+        window.location.href = "/";
+      }
+    } catch {}
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -52,6 +62,11 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {error && (
+          <p className="mt-2 text-xs text-destructive font-mono bg-destructive/10 p-2 rounded max-w-sm mx-auto overflow-hidden text-ellipsis">
+            {error instanceof Error ? error.message : String(error)}
+          </p>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -68,6 +83,12 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           >
             Go home
           </a>
+          <button
+            onClick={handleResetSession}
+            className="inline-flex items-center justify-center rounded-md border border-destructive/30 bg-background px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10"
+          >
+            Reset session
+          </button>
         </div>
       </div>
     </div>

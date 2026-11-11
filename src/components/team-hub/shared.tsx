@@ -1,19 +1,44 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight, Check, Clock3, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { LeadStatus } from "./data";
+import type { LeadStatus } from "@/lib/supabase/types";
+
+export const formatMoney = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
 
 export function Avatar({
   initials,
   color = "avatar-lilac",
   size = "md",
+  avatarUrl,
 }: {
   initials: string;
   color?: string;
   size?: "sm" | "md" | "lg";
+  avatarUrl?: string;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (avatarUrl && !imgFailed) {
+    return (
+      <span className={`avatar avatar-${size} avatar-img-wrap`} aria-label={initials} title={initials}>
+        <img
+          src={avatarUrl}
+          alt={initials}
+          className="avatar-img"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      </span>
+    );
+  }
+
   return (
-    <span className={`avatar ${color} avatar-${size}`} aria-label={initials}>
+    <span className={`avatar ${color} avatar-${size}`} aria-label={initials} title={initials}>
       {initials}
     </span>
   );
