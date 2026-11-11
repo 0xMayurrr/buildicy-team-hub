@@ -65,6 +65,8 @@ import { MemberUpdates } from "./MemberUpdates";
 import { MemberProfileModal } from "./MemberProfileModal";
 import { TeamChat } from "./TeamChat";
 import { AvatarPickerModal } from "./AvatarPickerModal";
+import { GeminiAgent } from "./GeminiAgent";
+import { CookieBanner } from "./CookieBanner";
 import {
   WORKING_STATUS_CONFIG,
   LEAD_POTENTIAL_CONFIG,
@@ -471,6 +473,12 @@ export function TeamHubApp() {
           onSelectSuccess={() => setAvatarPickerOpen(false)}
         />
       )}
+
+      {/* Gemini AI Agent */}
+      {mounted && currentUser && <GeminiAgent currentUser={currentUser} />}
+
+      {/* Cookie consent */}
+      {mounted && <CookieBanner />}
     </div>
   );
 }
@@ -479,11 +487,11 @@ function Brand() {
   return (
     <div className="brand">
       <img
-        src="/buildicy-mark.png"
-        alt="Buildicy Logo"
+        src="/logo.png"
+        alt="Buildicy"
         className="brand-logo-img"
         onError={(e) => {
-          (e.currentTarget as HTMLImageElement).style.display = "none";
+          (e.currentTarget as HTMLImageElement).src = "/buildicy-mark.png";
         }}
       />
       <span className="brand-text">

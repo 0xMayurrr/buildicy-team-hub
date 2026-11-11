@@ -1222,6 +1222,18 @@ export function useHubState() {
   useEffect(() => {
     HubStore.syncFromSupabase();
 
+    // Real-time polling every 15s
+    const pollInterval = setInterval(() => {
+      HubStore.syncFromSupabase().then(() => {
+        setLeads(HubStore.getLeads());
+        setNotifications(HubStore.getNotifications());
+        setActivities(HubStore.getActivities());
+        setUsers(HubStore.getUsers());
+        setChannels(HubStore.getChannels());
+        setVersion((v) => v + 1);
+      });
+    }, 15000);
+
     const refresh = () => {
       setUser(HubStore.getCurrentUser());
       setLeads(HubStore.getLeads());
@@ -1237,6 +1249,7 @@ export function useHubState() {
     window.addEventListener("buildicy_storage_update", refresh);
     window.addEventListener("storage", refresh);
     return () => {
+      clearInterval(pollInterval);
       window.removeEventListener("buildicy_storage_update", refresh);
       window.removeEventListener("storage", refresh);
     };
