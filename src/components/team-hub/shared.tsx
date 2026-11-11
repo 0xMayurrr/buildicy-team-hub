@@ -2,13 +2,24 @@ import { useState, type ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight, Check, Clock3, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { LeadStatus } from "@/lib/supabase/types";
+import { HubStore } from "@/lib/supabase/store";
 
-export const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-US", {
+export const formatMoney = (amount: number, currencyOverride?: "USD" | "INR") => {
+  const currency = currencyOverride || (typeof window !== "undefined" ? HubStore.getCurrency() : "USD");
+  const safeAmount = Number(amount) || 0;
+  if (currency === "INR") {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(safeAmount);
+  }
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(safeAmount);
+};
 
 export function Avatar({
   initials,

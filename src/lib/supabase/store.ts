@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import type {
   UserProfile,
   UserRole,
@@ -74,6 +75,23 @@ export const CREDENTIALS: Record<
     workingStatus: "Follow-ups",
     avatarUrl: "/avatars/3d-avatar-2.jpg",
   },
+};
+
+export const getStoredCredentials = (): Record<
+  string,
+  {
+    pass: string;
+    role: UserRole;
+    name: string;
+    initials: string;
+    color: string;
+    title: string;
+    workingStatus: WorkingStatus;
+    avatarUrl: string;
+  }
+> => {
+  const custom = getStored<Record<string, any>>("buildicy_custom_credentials", {});
+  return { ...CREDENTIALS, ...custom };
 };
 
 export const INITIAL_USERS: UserProfile[] = [
@@ -260,6 +278,9 @@ export const HubStore = {
 
     const cur = HubStore.getCurrentUser();
     if (cur && cur.id === userId) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`buildicy_avatar_saved_${cur.email.toLowerCase()}`, "true");
+      }
       HubStore.setCurrentUser({ ...cur, avatarUrl, avatarChosen: true });
     }
 
@@ -268,7 +289,7 @@ export const HubStore = {
 
   login: async (email: string, pass: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
-    const cred = CREDENTIALS[cleanEmail];
+    const cred = getStoredCredentials()[cleanEmail];
     if (!cred || cred.pass !== pass.trim()) {
       return { success: false, error: "Invalid email or password. Please verify your credentials." };
     }
@@ -340,6 +361,119 @@ export const HubStore = {
       localStorage.setItem("buildicy_fresh_v16_clean_slate", "true");
       window.dispatchEvent(new Event("buildicy_storage_update"));
     }
+  },
+
+  createUser: (data: {
+    name: string;
+    email: string;
+    pass: string;
+    title: string;
+    department?: string;
+  }): UserProfile => {
+    const allUsers = HubStore.getUsers();
+    const cleanEmail = data.email.trim().toLowerCase();
+    const initials =
+      data.name
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "MB";
+
+    const colors = ["avatar-peach", "avatar-sage", "avatar-rose", "avatar-lilac", "avatar-sky"];
+    const color = colors[allUsers.length % colors.length] || "avatar-peach";
+    const avatarNum = ((allUsers.length - 1) % 12) + 1;
+    const avatarUrl = `/avatars/3d-avatar-${avatarNum}.jpg`;
+
+    const newUser: UserProfile = {
+      id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      email: cleanEmail,
+      name: data.name.trim(),
+      role: "member",
+      title: data.title.trim() || "Marketing Specialist",
+      department: data.department?.trim() || "Marketing",
+      initials,
+      color,
+      activeStatus: "Active now",
+      workingStatus: "Outreach",
+      avatarUrl,
+      avatarChosen: true,
+      statusUpdatedAt: new Date().toISOString(),
+    };
+
+    setStored("buildicy_users", [...allUsers, newUser]);
+
+    const custom = getStored<Record<string, any>>("buildicy_custom_credentials", {});
+    custom[cleanEmail] = {
+      pass: data.pass.trim(),
+      role: "member",
+      name: newUser.name,
+      initials: newUser.initials,
+      color: newUser.color,
+      title: newUser.title,
+      workingStatus: "Outreach",
+      avatarUrl: newUser.avatarUrl,
+    };
+    setStored("buildicy_custom_credentials", custom);
+
+    supabase.insert("profiles", {
+      id: newUser.id,
+      email: newUser.email,
+      full_name: newUser.name,
+      role: "member",
+      title: newUser.title,
+      department: newUser.department,
+      initials: newUser.initials,
+      color: newUser.color,
+      active_status: "Active now",
+    });
+
+    return newUser;
+  },
+
+  deleteUser: (userId: string): boolean => {
+    const allUsers = HubStore.getUsers();
+    const target = allUsers.find((u) => u.id === userId);
+    if (!target || target.role === "founder") return false;
+
+    const filtered = allUsers.filter((u) => u.id !== userId);
+    setStored("buildicy_users", filtered);
+
+    const custom = getStored<Record<string, any>>("buildicy_custom_credentials", {});
+    delete custom[target.email.toLowerCase()];
+    setStored("buildicy_custom_credentials", custom);
+
+    const leads = HubStore.getLeads();
+    const founder = allUsers.find((u) => u.role === "founder");
+    if (founder) {
+      const reassigned = leads.map((l) =>
+        l.ownerId === userId
+          ? { ...l, ownerId: founder.id, ownerName: founder.name, updated: "Just now" }
+          : l,
+      );
+      setStored("buildicy_leads", reassigned);
+    }
+
+    supabase.delete("profiles", `id=eq.${userId}`);
+    return true;
+  },
+
+  getCurrency: (): "USD" | "INR" => {
+    return getStored<"USD" | "INR">("buildicy_currency", "USD");
+  },
+
+  setCurrency: (c: "USD" | "INR") => {
+    setStored("buildicy_currency", c);
+    window.dispatchEvent(new Event("buildicy_storage_update"));
+  },
+
+  deleteChatMessage: (channelId: string, messageId: string) => {
+    const all = getStored<Record<string, ChatMessage[]>>("buildicy_chat", INITIAL_CHAT);
+    const existing = all[channelId] ?? [];
+    all[channelId] = existing.filter((m) => m.id !== messageId);
+    setStored("buildicy_chat", all);
+    supabase.delete("chat_messages", `id=eq.${messageId}`);
+    window.dispatchEvent(new Event("buildicy_storage_update"));
   },
 
   // Pull real remote data from Supabase PostgreSQL tables
@@ -464,26 +598,29 @@ export const HubStore = {
 
       const remoteMessages = await withTimeout(supabase.select<any>("chat_messages", "order=created_at.asc&limit=300") as Promise<any[]>);
       if (remoteMessages && remoteMessages.length > 0) {
-        const chatMap: Record<string, ChatMessage[]> = {};
+        const currentChat = getStored<Record<string, ChatMessage[]>>("buildicy_chat", INITIAL_CHAT);
+        const mergedChat: Record<string, ChatMessage[]> = { ...currentChat };
         remoteMessages.forEach((m: any) => {
           const chId = m.channel_id;
           if (!chId) return;
-          if (!chatMap[chId]) chatMap[chId] = [];
-          chatMap[chId].push({
-            id: m.id,
-            channelId: chId,
-            userId: m.user_id || "",
-            author: m.author,
-            initials: m.initials,
-            color: m.color || "avatar-peach",
-            text: m.text,
-            time: m.created_at
-              ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-              : "Just now",
-            createdAt: m.created_at,
-          });
+          if (!mergedChat[chId]) mergedChat[chId] = [];
+          if (!mergedChat[chId]!.some((existing) => existing.id === m.id || (existing.text === m.text && existing.author === m.author))) {
+            mergedChat[chId]!.push({
+              id: m.id,
+              channelId: chId,
+              userId: m.user_id || "",
+              author: m.author,
+              initials: m.initials,
+              color: m.color || "avatar-peach",
+              text: m.text,
+              time: m.created_at
+                ? new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "Just now",
+              createdAt: m.created_at,
+            });
+          }
         });
-        setStored("buildicy_chat", chatMap);
+        setStored("buildicy_chat", mergedChat);
       }
     } catch (err) {
       console.warn("Supabase background sync:", err);
@@ -718,6 +855,64 @@ export const HubStore = {
       time: "Just now",
       userId: newOwner.id,
     });
+  },
+
+  deleteLead: (leadId: string): boolean => {
+    const leads = HubStore.getLeads();
+    const target = leads.find((l) => l.id === leadId);
+    const updated = leads.filter((l) => l.id !== leadId);
+    setStored("buildicy_leads", updated);
+
+    // Sync deletion to Supabase
+    supabase.delete("leads", `id=eq.${leadId}`);
+
+    if (target) {
+      const user = HubStore.getCurrentUser();
+      HubStore.addActivity({
+        leadId,
+        userId: user?.id ?? "unknown",
+        person: user?.name ?? "Team member",
+        initials: user?.initials ?? "TM",
+        color: user?.color ?? "avatar-rose",
+        action: "deleted lead",
+        subject: target.name,
+        detail: `(${target.company}) removed from workspace pipeline`,
+        time: "Just now",
+        type: "lead",
+      });
+    }
+
+    window.dispatchEvent(new Event("buildicy_storage_update"));
+    return true;
+  },
+
+  deleteLeads: (leadIds: string[]): boolean => {
+    if (!leadIds || leadIds.length === 0) return false;
+    const leads = HubStore.getLeads();
+    const idSet = new Set(leadIds);
+    const updated = leads.filter((l) => !idSet.has(l.id));
+    setStored("buildicy_leads", updated);
+
+    leadIds.forEach((id) => {
+      supabase.delete("leads", `id=eq.${id}`);
+    });
+
+    const user = HubStore.getCurrentUser();
+    HubStore.addActivity({
+      leadId: leadIds[0] || "bulk",
+      userId: user?.id ?? "unknown",
+      person: user?.name ?? "Team member",
+      initials: user?.initials ?? "TM",
+      color: user?.color ?? "avatar-rose",
+      action: "bulk deleted",
+      subject: `${leadIds.length} leads`,
+      detail: `removed from workspace pipeline`,
+      time: "Just now",
+      type: "lead",
+    });
+
+    window.dispatchEvent(new Event("buildicy_storage_update"));
+    return true;
   },
 
   getActivities: (leadId?: string): LeadActivity[] => {
@@ -1206,20 +1401,55 @@ export const HubStore = {
     supabase.delete("chat_channels", `id=eq.${channelId}`);
   },
 
-  getDmChannelId: (userAId: string, userBId: string): string => {
-    return `dm_${[userAId, userBId].sort().join("_")}`;
+  getDmChannelId: (userAIdOrEmail: string, userBIdOrEmail: string): string => {
+    const allUsers = HubStore.getUsers();
+    const normalize = (val: string) => {
+      if (!val) return "";
+      if (val.includes("@")) return val.toLowerCase().trim();
+      const matched = allUsers.find((u) => u.id === val || u.email.toLowerCase() === val.toLowerCase());
+      return matched ? matched.email.toLowerCase().trim() : val.toLowerCase().trim();
+    };
+    const emailA = normalize(userAIdOrEmail);
+    const emailB = normalize(userBIdOrEmail);
+    return `dm_${[emailA, emailB].sort().join("_")}`;
   },
 
   getChat: (channelId: string): ChatMessage[] => {
     const all = getStored<Record<string, ChatMessage[]>>("buildicy_chat", INITIAL_CHAT);
-    return all[channelId] ?? [];
+    if (all[channelId] && all[channelId]!.length > 0) return all[channelId]!;
+
+    // Fallback: check if messages exist under alternate DM keys
+    if (channelId.startsWith("dm_")) {
+      const parts = channelId.replace("dm_", "").split("_");
+      const allUsers = HubStore.getUsers();
+      for (const [key, msgs] of Object.entries(all)) {
+        if (!key.startsWith("dm_") || !Array.isArray(msgs) || msgs.length === 0) continue;
+        const keyParts = key.replace("dm_", "").split("_");
+        if (keyParts.length !== 2) continue;
+
+        const matchesUser = (partA: string, partB: string) => {
+          if (partA === partB) return true;
+          const uA = allUsers.find((u) => u.id === partA || u.email.toLowerCase() === partA.toLowerCase());
+          const uB = allUsers.find((u) => u.id === partB || u.email.toLowerCase() === partB.toLowerCase());
+          return Boolean(uA && uB && (uA.id === uB.id || uA.email.toLowerCase() === uB.email.toLowerCase()));
+        };
+
+        const direct = matchesUser(parts[0] || "", keyParts[0] || "") && matchesUser(parts[1] || "", keyParts[1] || "");
+        const inverted = matchesUser(parts[0] || "", keyParts[1] || "") && matchesUser(parts[1] || "", keyParts[0] || "");
+
+        if (direct || inverted) {
+          return msgs;
+        }
+      }
+    }
+    return [];
   },
 
   sendChatMessage: (channelId: string, text: string): ChatMessage | null => {
     const user = HubStore.getCurrentUser();
     if (!user) return null;
     const all = getStored<Record<string, ChatMessage[]>>("buildicy_chat", INITIAL_CHAT);
-    const existing = all[channelId] ?? [];
+    const existing = HubStore.getChat(channelId);
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes().toString().padStart(2, "0");
@@ -1239,6 +1469,24 @@ export const HubStore = {
     };
     all[channelId] = [...existing, newMsg];
     setStored("buildicy_chat", all);
+
+    // Notify recipient if direct message
+    if (channelId.startsWith("dm_")) {
+      const parts = channelId.replace("dm_", "").split("_");
+      const allUsers = HubStore.getUsers();
+      const recipientKey = parts.find((p) => p !== user.email.toLowerCase() && p !== user.id);
+      const recipient = allUsers.find(
+        (u) => u.email.toLowerCase() === recipientKey || u.id === recipientKey,
+      );
+      if (recipient) {
+        HubStore.addNotification({
+          title: `💬 New message from ${user.name}`,
+          body: text.length > 50 ? `${text.slice(0, 50)}…` : text,
+          time: "Just now",
+          userId: recipient.id,
+        });
+      }
+    }
 
     supabase.insert("chat_messages", {
       channel_id: channelId,
@@ -1260,17 +1508,32 @@ export const HubStore = {
     const all = HubStore.getNotifications();
     const newNotif: NotificationItem = {
       ...notif,
-      id: `notif-${Date.now()}`,
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       isRead: false,
       createdAt: new Date().toISOString(),
     };
     setStored("buildicy_notifications", [newNotif, ...all]);
+
+    // Live sonner toast for immediate user awareness
+    if (typeof window !== "undefined") {
+      const cur = HubStore.getCurrentUser();
+      const isRelevant = !cur || notif.userId === "all" || notif.userId === cur.id || notif.userId === cur.email;
+      if (isRelevant) {
+        toast.info(notif.title, {
+          description: notif.body,
+        });
+      }
+    }
   },
 
   markNotificationRead: (id?: string) => {
     const all = HubStore.getNotifications();
     const updated = all.map((n) => (id === undefined || n.id === id ? { ...n, isRead: true } : n));
     setStored("buildicy_notifications", updated);
+  },
+
+  clearAllNotifications: () => {
+    setStored("buildicy_notifications", []);
   },
 
   getTasks: (userId: string): DailyTask[] => {

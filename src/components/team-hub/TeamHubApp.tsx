@@ -34,6 +34,8 @@ import {
   Clock,
   Award,
   Trash2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +69,6 @@ import { MemberProfileModal } from "./MemberProfileModal";
 import { TeamChat } from "./TeamChat";
 import { AvatarPickerModal } from "./AvatarPickerModal";
 import { GeminiAgent } from "./GeminiAgent";
-import { CookieBanner } from "./CookieBanner";
 import {
   WORKING_STATUS_CONFIG,
   LEAD_POTENTIAL_CONFIG,
@@ -89,12 +90,32 @@ export function TeamHubApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [currency, setCurrencyState] = useState<"USD" | "INR">(() => HubStore.getCurrency());
 
   // Compulsory avatar selection on first login / onboarding (strictly for team members, founder is exempt)
-  const isAvatarCompulsory = Boolean(currentUser && currentUser.role !== "founder" && !currentUser.avatarChosen);
+  // Once chosen, it is permanently saved in localStorage and user profile, never prompting again
+  const isAvatarSaved =
+    typeof window !== "undefined" &&
+    currentUser?.email &&
+    Boolean(localStorage.getItem(`buildicy_avatar_saved_${currentUser.email.toLowerCase()}`));
+  const isAvatarCompulsory = Boolean(
+    currentUser &&
+      currentUser.role !== "founder" &&
+      !currentUser.avatarChosen &&
+      !isAvatarSaved,
+  );
 
   useEffect(() => {
     setMounted(true);
+    const handleStorage = () => {
+      setCurrencyState(HubStore.getCurrency());
+    };
+    window.addEventListener("buildicy_storage_update", handleStorage);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("buildicy_storage_update", handleStorage);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   useEffect(() => {
@@ -329,6 +350,34 @@ export function TeamHubApp() {
             )}
           </div>
           <div className="topbar-actions">
+            {/* Currency Switcher: USD ($) & INR (₹) */}
+            <div className="currency-toggle-pill" role="group" aria-label="Currency Selector">
+              <button
+                type="button"
+                className={`currency-btn ${currency === "USD" ? "active" : ""}`}
+                onClick={() => {
+                  HubStore.setCurrency("USD");
+                  setCurrencyState("USD");
+                  toast.info("Currency changed to US Dollar ($)");
+                }}
+                title="US Dollars ($)"
+              >
+                $ USD
+              </button>
+              <button
+                type="button"
+                className={`currency-btn ${currency === "INR" ? "active" : ""}`}
+                onClick={() => {
+                  HubStore.setCurrency("INR");
+                  setCurrencyState("INR");
+                  toast.info("Currency changed to Indian Rupee (₹)");
+                }}
+                title="Indian Rupee (₹)"
+              >
+                ₹ INR
+              </button>
+            </div>
+
             <button
               className="round-action"
               onClick={() => go("notifications")}
@@ -491,9 +540,6 @@ export function TeamHubApp() {
       {mounted && currentUser && (
         <GeminiAgent currentUser={currentUser} onOpenLead={openLead} onNavigate={go} />
       )}
-
-      {/* Cookie consent */}
-      {mounted && <CookieBanner />}
     </div>
   );
 }
@@ -985,6 +1031,7 @@ function LeadsView({
   const [ownerFilter, setOwnerFilter] = useState<"all" | "mine">(
     currentUser.role === "founder" ? "all" : "mine",
   );
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -999,6 +1046,41 @@ function LeadsView({
       return matchStatus && matchQuery && matchOwner;
     });
   }, [leads, query, status, ownerFilter, currentUser]);
+
+  const isAllSelected = filtered.length > 0 && selectedLeads.length === filtered.length;
+
+  const handleToggleAll = () => {
+    if (isAllSelected) {
+      setSelectedLeads([]);
+    } else {
+      setSelectedLeads(filtered.map((l) => l.id));
+    }
+  };
+
+  const handleToggleOne = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedLeads((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+  };
+
+  const handleDeleteSingle = (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Are you sure you want to delete lead "${name}"?`)) {
+      HubStore.deleteLead(id);
+      setSelectedLeads((prev) => prev.filter((i) => i !== id));
+      toast.success(`Lead "${name}" deleted`);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedLeads.length === 0) return;
+    if (confirm(`Are you sure you want to permanently delete all ${selectedLeads.length} selected lead(s)?`)) {
+      HubStore.deleteLeads(selectedLeads);
+      toast.success(`${selectedLeads.length} leads deleted successfully.`);
+      setSelectedLeads([]);
+    }
+  };
 
   const exportCSV = () => {
     const headers = ["ID", "Name", "Company", "Email", "Phone", "Source", "Value", "Status", "Owner", "Created"];
@@ -1089,6 +1171,48 @@ function LeadsView({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Bulk Action Bar when 1 or more leads are checked */}
+        {selectedLeads.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 16px",
+              background: "oklch(0.96 0.04 20)",
+              border: "1px solid color-mix(in oklab, var(--destructive) 35%, transparent)",
+              borderRadius: "8px",
+              margin: "12px 16px 4px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--foreground)" }}>
+                {selectedLeads.length} of {filtered.length} lead{selectedLeads.length > 1 ? "s" : ""} selected
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                style={{ height: "32px", fontSize: "11px", fontWeight: 600 }}
+              >
+                <Trash2 size={13} style={{ marginRight: "5px" }} />
+                Delete selected ({selectedLeads.length})
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedLeads([])}
+                style={{ height: "32px", fontSize: "11px" }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="status-tabs">
           {(["All", ...statuses] as const).map((s) => (
             <button key={s} className={status === s ? "active" : ""} onClick={() => setStatus(s)}>
@@ -1101,6 +1225,15 @@ function LeadsView({
           <table className="lead-table">
             <thead>
               <tr>
+                <th style={{ width: "38px", textAlign: "center", padding: "0 8px" }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all leads"
+                    checked={isAllSelected}
+                    onChange={handleToggleAll}
+                    style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "oklch(0.53 0.23 292)" }}
+                  />
+                </th>
                 <th>Lead</th>
                 <th>Potential</th>
                 <th>Status</th>
@@ -1109,14 +1242,29 @@ function LeadsView({
                 <th>Owner</th>
                 <th>Next Follow-up</th>
                 <th>Updated</th>
+                <th style={{ width: "48px", textAlign: "center" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((l) => {
                 const pot = l.qualityPotential || "Medium potential";
                 const potConf = LEAD_POTENTIAL_CONFIG[pot] || LEAD_POTENTIAL_CONFIG["Medium potential"];
+                const isSelected = selectedLeads.includes(l.id);
                 return (
-                  <tr key={l.id} onClick={() => openLead(l.id)}>
+                  <tr
+                    key={l.id}
+                    onClick={() => openLead(l.id)}
+                    style={{ background: isSelected ? "oklch(0.53 0.23 292 / 0.05)" : undefined, cursor: "pointer" }}
+                  >
+                    <td style={{ textAlign: "center", padding: "0 8px" }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select lead ${l.name}`}
+                        checked={isSelected}
+                        onChange={(e) => handleToggleOne(l.id, e as any)}
+                        style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "oklch(0.53 0.23 292)" }}
+                      />
+                    </td>
                     <td>
                       <div className="lead-person">
                         <Avatar initials={l.initials} color={l.color} size="sm" />
@@ -1155,6 +1303,17 @@ function LeadsView({
                       </span>
                     </td>
                     <td className="muted-cell">{l.updated}</td>
+                    <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="chat-msg-del"
+                        title="Delete lead"
+                        style={{ color: "var(--destructive)", padding: "4px 8px", borderRadius: "6px", display: "inline-flex", alignItems: "center" }}
+                        onClick={(e) => handleDeleteSingle(l.id, l.name, e)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -1193,51 +1352,194 @@ function AddLeadDialog({
 
   const parseAndImport = (file: File) => {
     setImporting(true);
+    const fileName = file.name.toLowerCase();
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+    const processRows = (rows: string[][]) => {
+      if (rows.length < 2 || !rows[0]) {
+        toast.error("File has no data rows.");
+        setImporting(false);
+        return;
+      }
+
+      const headers = rows[0].map((h) => (h || "").trim().toLowerCase());
+
+      // Helper to find header by keywords
+      const findCol = (keywords: string[]) =>
+        headers.findIndex((h) => keywords.some((k) => h.includes(k)));
+
+      // 1. Name column: search common terms; IF NOT FOUND, FALLBACK TO COL 0 so ANY header works!
+      let nameIdx = findCol([
+        "name", "client", "contact", "customer", "lead", "person", "prospect", "full", "first", "title", "account", "business"
+      ]);
+      if (nameIdx === -1) {
+        nameIdx = 0; // Universal fallback: accepts any spreadsheet header
+      }
+
+      // 2. Company column: search common terms; fallback to col 1 if col 1 != nameIdx
+      let companyIdx = findCol([
+        "company", "org", "organization", "business", "firm", "agency", "enterprise", "brand", "client"
+      ]);
+      if (companyIdx === -1 && rows[0].length > 1 && nameIdx !== 1) {
+        companyIdx = 1;
+      }
+
+      // 3. Email column
+      const emailIdx = findCol(["email", "mail"]);
+
+      // 4. Phone column
+      const phoneIdx = findCol(["phone", "tel", "mobile", "cell", "contact number"]);
+
+      // 5. Deal value column
+      const valueIdx = findCol(["value", "deal", "amount", "budget", "price", "revenue", "inr", "usd", "cost"]);
+
+      // 6. Source column
+      const sourceIdx = findCol(["source", "channel", "origin", "platform", "campaign", "medium"]);
+
+      let count = 0;
+      const assignedUser = users.find((u) => u.id === selectedOwnerId) ?? currentUser;
+
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i];
+        if (!cols || cols.length === 0 || cols.every((c) => !c || !c.trim())) continue;
+
+        let name = (cols[nameIdx] || "").trim();
+        // If name happens to be empty on this row, find first non-empty text in the row
+        if (!name) {
+          name = cols.find((c) => c && c.trim().length > 0) || `Lead #${count + 1}`;
+        }
+
+        // Auto-detect email if emailIdx not found in headers
+        let email = emailIdx >= 0 && cols[emailIdx] ? cols[emailIdx]!.trim() : "";
+        if (!email) {
+          const emailCell = cols.find((c) => c && c.includes("@"));
+          if (emailCell) email = emailCell.trim();
+        }
+
+        // Auto-detect phone if phoneIdx not found
+        let phone = phoneIdx >= 0 && cols[phoneIdx] ? cols[phoneIdx]!.trim() : "";
+        if (!phone) {
+          const phoneCell = cols.find((c) => c && /^\+?[\d\s-()]{7,20}$/.test(c.trim()));
+          if (phoneCell) phone = phoneCell.trim();
+        }
+        if (!phone) phone = "Not added";
+
+        // Auto-detect company
+        let company = companyIdx >= 0 && cols[companyIdx] ? cols[companyIdx]!.trim() : "";
+        if (!company || company === name) company = "Independent";
+
+        // Auto-detect deal value
+        let value = 0;
+        if (valueIdx >= 0 && cols[valueIdx]) {
+          const num = Number(cols[valueIdx]!.replace(/[^0-9.]/g, ""));
+          if (!isNaN(num)) value = num;
+        } else {
+          const valCell = cols.find((c) => c && /^[₹$€£]?\s*\d+([,.]\d+)?$/.test(c.trim()));
+          if (valCell) {
+            const num = Number(valCell.replace(/[^0-9.]/g, ""));
+            if (!isNaN(num)) value = num;
+          }
+        }
+
+        const source = sourceIdx >= 0 && cols[sourceIdx] ? cols[sourceIdx]!.trim() : "Import";
+
+        const newLead = HubStore.addLead({
+          name,
+          company,
+          email,
+          phone,
+          source,
+          value,
+          status: "New",
+          qualityPotential: "Medium potential",
+          ownerId: assignedUser.id,
+          ownerName: assignedUser.name,
+          initials: name
+            .split(" ")
+            .map((p) => p[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase() || "LD",
+          color: assignedUser.color,
+        });
+
+        onAdd(newLead);
+        count++;
+      }
+
+      toast.success(`${count} lead${count !== 1 ? "s" : ""} imported successfully!`);
+      setImporting(false);
+      onOpenChange(false);
+    };
+
+    if (isExcel) {
+      const runXLSX = (XLSX: any) => {
+        try {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+            const workbook = XLSX.read(data, { type: "array" });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            const stringRows = jsonRows.map((row) => row.map((cell: any) => String(cell ?? "").trim()));
+            processRows(stringRows);
+          };
+          reader.readAsArrayBuffer(file);
+        } catch {
+          toast.error("Failed to parse Excel file. You can also save it as CSV and upload.");
+          setImporting(false);
+        }
+      };
+
+      if (typeof window !== "undefined" && (window as any).XLSX) {
+        runXLSX((window as any).XLSX);
+      } else {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+        script.onload = () => {
+          if ((window as any).XLSX) {
+            runXLSX((window as any).XLSX);
+          } else {
+            toast.error("Excel parser could not be loaded. Please upload as CSV.");
+            setImporting(false);
+          }
+        };
+        script.onerror = () => {
+          toast.error("Could not load Excel parser. Please export as CSV and upload.");
+          setImporting(false);
+        };
+        document.body.appendChild(script);
+      }
+      return;
+    }
+
+    // CSV / TSV handling with delimiter auto-detection
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        const lines = text.split(/\r?\n/).filter(Boolean);
-        if (lines.length < 2 || !lines[0]) { toast.error("File has no data rows."); setImporting(false); return; }
-        const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
-        const nameIdx = headers.findIndex((h) => h.includes("name"));
-        const companyIdx = headers.findIndex((h) => h.includes("company"));
-        const emailIdx = headers.findIndex((h) => h.includes("email"));
-        const phoneIdx = headers.findIndex((h) => h.includes("phone"));
-        const valueIdx = headers.findIndex((h) => h.includes("value") || h.includes("deal"));
-        const sourceIdx = headers.findIndex((h) => h.includes("source"));
-        if (nameIdx === -1) { toast.error("CSV must have a 'name' column."); setImporting(false); return; }
-        let count = 0;
-        for (let i = 1; i < lines.length; i++) {
-          const lineStr = lines[i];
-          if (!lineStr) continue;
-          const cols = lineStr.split(",").map((c) => c.replace(/^"|"$/g, "").trim());
-          const name = cols[nameIdx];
-          if (!name) continue;
-          const assignedUser = users.find((u) => u.id === selectedOwnerId) ?? currentUser;
-          const newLead = HubStore.addLead({
-            name,
-            company: companyIdx >= 0 && cols[companyIdx] ? cols[companyIdx]! : "Independent",
-            email: emailIdx >= 0 && cols[emailIdx] ? cols[emailIdx]! : "",
-            phone: phoneIdx >= 0 ? cols[phoneIdx] || "Not added" : "Not added",
-            source: sourceIdx >= 0 ? cols[sourceIdx] || "Import" : "Import",
-            value: valueIdx >= 0 ? Number(cols[valueIdx]) || 0 : 0,
-            status: "New",
-            qualityPotential: "Medium potential",
-            ownerId: assignedUser.id,
-            ownerName: assignedUser.name,
-            initials: name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
-            color: assignedUser.color,
-          });
-          onAdd(newLead);
-          count++;
+        const rawLines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (rawLines.length < 2 || !rawLines[0]) {
+          toast.error("File has no data rows.");
+          setImporting(false);
+          return;
         }
-        toast.success(`${count} lead${count !== 1 ? "s" : ""} imported successfully!`);
-        onOpenChange(false);
+
+        const firstLine = rawLines[0];
+        let delimiter = ",";
+        if (firstLine.includes("\t")) delimiter = "\t";
+        else if (firstLine.includes(";") && !firstLine.includes(",")) delimiter = ";";
+
+        const parsedRows = rawLines.map((line) => {
+          return line.split(delimiter).map((c) => c.replace(/^"|"$/g, "").trim());
+        });
+
+        processRows(parsedRows);
       } catch {
-        toast.error("Failed to parse file. Make sure it's a valid CSV.");
+        toast.error("Failed to parse file. Make sure it is a valid spreadsheet or CSV.");
+        setImporting(false);
       }
-      setImporting(false);
     };
     reader.readAsText(file);
   };
@@ -1311,34 +1613,36 @@ function AddLeadDialog({
               onClick={() => fileRef.current?.click()}
             >
               <Upload style={{ width: "28px", height: "28px", color: "var(--primary)", marginBottom: "10px" }} />
-              <strong>Drop your file here or click to browse</strong>
-              <span>Supports .csv, .xlsx (save as CSV from Excel/Google Sheets)</span>
-              <span style={{ fontSize: "10px", color: "var(--muted-foreground)", marginTop: "4px" }}>
-                Required column: <code>name</code> · Optional: company, email, phone, value, source
+              <strong>Drop your spreadsheet here or click to browse</strong>
+              <span>Supports Excel (.xlsx, .xls), CSV, TSV & Google Sheets</span>
+              <span style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "4px" }}>
+                Accepts <b>any column headers</b> — automatically detects names, emails, phones & values.
               </span>
-              {importing && <span style={{ color: "var(--primary)", fontSize: "12px", marginTop: "8px" }}>Importing...</span>}
+              {importing && <span style={{ color: "var(--primary)", fontSize: "12px", marginTop: "8px", fontWeight: 600 }}>Importing leads...</span>}
             </div>
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.ods,.tsv"
+              accept=".csv,.xlsx,.xls,.ods,.tsv,.txt"
               style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) parseAndImport(f); }}
             />
-            <div style={{ marginTop: "14px" }}>
-              <p style={{ fontSize: "11px", fontWeight: 600, marginBottom: "6px" }}>Assign imported leads to:</p>
-              <select
-                value={selectedOwnerId}
-                onChange={(e) => setSelectedOwnerId(e.target.value)}
-                style={{ width: "100%", height: "38px", borderRadius: "8px", padding: "0 10px", background: "var(--input)", border: "1px solid var(--border)", fontSize: "12px" }}
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name} — {u.title}</option>
-                ))}
-              </select>
-            </div>
+            {currentUser.role === "founder" && (
+              <div style={{ marginTop: "14px" }}>
+                <p style={{ fontSize: "11px", fontWeight: 600, marginBottom: "6px" }}>Assign imported leads to:</p>
+                <select
+                  value={selectedOwnerId}
+                  onChange={(e) => setSelectedOwnerId(e.target.value)}
+                  style={{ width: "100%", height: "38px", borderRadius: "8px", padding: "0 10px", background: "var(--input)", border: "1px solid var(--border)", fontSize: "12px" }}
+                >
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} — {u.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--muted)", borderRadius: "8px", fontSize: "11px", color: "var(--muted-foreground)" }}>
-              💡 <strong>Tip:</strong> In Excel or Google Sheets, go to <em>File → Download → CSV</em> and upload that file here.
+              ✨ <strong>Universal Import:</strong> Works with any file headers or columns. Leads will be directly assigned and synced into your workspace pipeline.
             </div>
           </div>
         )}
@@ -1363,8 +1667,8 @@ function AddLeadDialog({
             <Input name="phone" placeholder="+1 (555) 000-0000" />
           </label>
           <label>
-            Deal value ($)
-            <Input name="value" type="number" min="0" placeholder="10000" />
+            Deal value ({HubStore.getCurrency() === "INR" ? "₹ INR" : "$ USD"})
+            <Input name="value" type="number" min="0" placeholder={HubStore.getCurrency() === "INR" ? "100000" : "10000"} />
           </label>
           <label>
             Source
@@ -1393,20 +1697,22 @@ function AddLeadDialog({
             Why is this prospect promising?
             <Input name="promisingReason" placeholder="e.g. Expanding sales team, actively seeking agency partners" />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            Assign to team member
-            <select
-              value={selectedOwnerId}
-              onChange={(e) => setSelectedOwnerId(e.target.value)}
-              style={{ width: "100%", height: "40px", borderRadius: "8px", padding: "0 10px", background: "var(--input)" }}
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} — {u.title} ({u.email})
-                </option>
-              ))}
-            </select>
-          </label>
+          {currentUser.role === "founder" && (
+            <label style={{ gridColumn: "1 / -1" }}>
+              Assign to team member
+              <select
+                value={selectedOwnerId}
+                onChange={(e) => setSelectedOwnerId(e.target.value)}
+                style={{ width: "100%", height: "40px", borderRadius: "8px", padding: "0 10px", background: "var(--input)" }}
+              >
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} — {u.title} ({u.email})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <DialogFooter className="form-footer">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -1522,6 +1828,34 @@ function LeadDetail({
         </div>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Log Outreach Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOutreachOpen(true)}
+            style={{ borderColor: "color-mix(in oklab, var(--primary) 40%, transparent)", color: "var(--primary)" }}
+          >
+            <Send size={13} style={{ marginRight: "4px" }} />
+            Log outreach
+          </Button>
+
+          {/* Delete Lead Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            style={{ color: "var(--destructive)", borderColor: "var(--border)" }}
+            onClick={() => {
+              if (confirm(`Are you sure you want to delete lead "${lead.name}"?`)) {
+                HubStore.deleteLead(lead.id);
+                toast.success(`Lead "${lead.name}" deleted.`);
+                back();
+              }
+            }}
+          >
+            <Trash2 size={13} style={{ marginRight: "4px" }} />
+            Delete lead
+          </Button>
+
           {/* Quality Potential Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1938,7 +2272,8 @@ function Notifications({
 }
 
 function TeamManagement({ users }: { users: UserProfile[] }) {
-  const [invite, setInvite] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [showMemberPass, setShowMemberPass] = useState(false);
   const leads = HubStore.getLeads();
 
   return (
@@ -1946,11 +2281,11 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
       <PageTitle
         eyebrow="Workspace"
         title="Team management"
-        description="Manage roles, ownership and team member access."
+        description="Create new team members, manage roles and configure access credentials."
         action={
-          <Button className="primary-pill" onClick={() => setInvite(true)}>
+          <Button className="primary-pill" onClick={() => setCreateOpen(true)}>
             <UserPlus />
-            Invite member
+            Create member
           </Button>
         }
       />
@@ -1958,7 +2293,7 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
         {users.map((m) => {
           const userLeads = leads.filter((l) => l.ownerId === m.id || l.ownerName === m.name);
           return (
-            <article className="member-card" key={m.email}>
+            <article className="member-card" key={m.id || m.email}>
               <Avatar initials={m.initials} color={m.color} size="lg" avatarUrl={m.avatarUrl} />
               <h3>{m.name}</h3>
               <p>{m.email}</p>
@@ -1971,59 +2306,141 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
                 </span>
                 <span>{m.activeStatus}</span>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full">
-                    Manage
-                    <ChevronDown />
+              <div style={{ display: "flex", gap: "8px", width: "100%", marginTop: "4px" }}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" style={{ flex: 1 }}>
+                      Manage
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem>Change role</DropdownMenuItem>
+                    <DropdownMenuItem>Reassign leads</DropdownMenuItem>
+                    {m.role !== "founder" && (
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete member ${m.name} (${m.email})? Their assigned leads will be transferred to you.`)) {
+                            HubStore.deleteUser(m.id);
+                            toast.success(`Member ${m.name} deleted.`);
+                          }
+                        }}
+                      >
+                        <Trash2 size={13} style={{ marginRight: "6px" }} />
+                        Delete member
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {m.role !== "founder" && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="Delete member"
+                    style={{ color: "var(--destructive)", borderColor: "var(--border)" }}
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete member ${m.name} (${m.email})? Their assigned leads will be transferred to you.`)) {
+                        HubStore.deleteUser(m.id);
+                        toast.success(`Member ${m.name} deleted.`);
+                      }
+                    }}
+                  >
+                    <Trash2 size={14} />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem>Change role</DropdownMenuItem>
-                  <DropdownMenuItem>Reassign leads</DropdownMenuItem>
-                  {m.role !== "founder" && (
-                    <DropdownMenuItem className="text-destructive">Remove access</DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
+              </div>
             </article>
           );
         })}
       </div>
-      <Dialog open={invite} onOpenChange={setInvite}>
-        <DialogContent className="hub-dialog">
+
+      {/* Founder: Create New Team Member Modal */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="hub-dialog" style={{ maxWidth: "520px" }}>
           <DialogHeader>
-            <DialogTitle>Invite a teammate</DialogTitle>
+            <DialogTitle>Create New Team Member</DialogTitle>
             <DialogDescription>
-              They’ll receive access to leads and channels based on their role.
+              Set up credentials so the new member can log in and access leads, outreach and channels.
             </DialogDescription>
           </DialogHeader>
           <form
-            className="lead-form single"
+            className="lead-form"
             onSubmit={(e) => {
               e.preventDefault();
               const d = new FormData(e.currentTarget);
-              const email = String(d.get("email")).trim();
-              if (!email) return;
+              const name = String(d.get("name") || "").trim();
+              const email = String(d.get("email") || "").trim().toLowerCase();
+              const pass = String(d.get("pass") || "").trim();
+              const title = String(d.get("title") || "").trim();
+              const department = String(d.get("department") || "Marketing").trim();
 
-              toast.success(`Invite dispatched to ${email}`);
-              setInvite(false);
+              if (!name || !email || !pass) {
+                toast.error("Please fill in name, email and password.");
+                return;
+              }
+
+              const existing = users.find((u) => u.email.toLowerCase() === email);
+              if (existing) {
+                toast.error(`A member with email ${email} already exists.`);
+                return;
+              }
+
+              const newUser = HubStore.createUser({
+                name,
+                email,
+                pass,
+                title: title || "Marketing Specialist",
+                department,
+              });
+
+              toast.success(`Account created for ${newUser.name}! They can now log in with ${email}.`);
+              setCreateOpen(false);
             }}
           >
             <label>
-              Email address
-              <Input name="email" type="email" required placeholder="teammate@buildicy.com" />
+              Full name
+              <Input name="name" required placeholder="e.g. Vikramaditya Rao" />
             </label>
             <label>
-              Role
-              <select name="role">
-                <option>Marketing</option>
-                <option>Sales Lead</option>
-                <option>Account Executive</option>
-                <option>Admin</option>
+              Work email address
+              <Input name="email" type="email" required placeholder="e.g. vikram.sales@buildicy.com" />
+            </label>
+            <label>
+              Login password
+              <div style={{ position: "relative" }}>
+                <Input name="pass" type={showMemberPass ? "text" : "password"} required placeholder="Set password for member login" style={{ paddingRight: "40px" }} />
+                <button
+                  type="button"
+                  onClick={() => setShowMemberPass((v) => !v)}
+                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", alignItems: "center" }}
+                >
+                  {showMemberPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </label>
+            <label>
+              Job Title
+              <Input name="title" required placeholder="e.g. Outreach Specialist / Sales Lead" />
+            </label>
+            <label style={{ gridColumn: "1 / -1" }}>
+              Department
+              <select name="department" defaultValue="Marketing">
+                <option value="Marketing">Marketing</option>
+                <option value="Sales">Sales & Business Development</option>
+                <option value="Growth">Growth & Partnerships</option>
+                <option value="Operations">Operations</option>
               </select>
             </label>
-            <Button className="primary-pill">Send invite</Button>
+            <DialogFooter className="form-footer" style={{ gridColumn: "1 / -1", marginTop: "12px" }}>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="primary-pill">
+                Create Member Account
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

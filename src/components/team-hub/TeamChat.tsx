@@ -58,13 +58,20 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
   // Direct message contacts (other team members)
   const dmContacts = useMemo(() => {
     return users
-      .filter((u) => u.id !== currentUser.id)
-      .map((u) => ({
-        id: HubStore.getDmChannelId(currentUser.id, u.id),
-        name: u.name,
-        member: u,
-      }));
-  }, [users, currentUser.id]);
+      .filter((u) => u.id !== currentUser.id && u.email.toLowerCase() !== currentUser.email.toLowerCase())
+      .map((u) => {
+        const channelId = HubStore.getDmChannelId(currentUser.email, u.email);
+        const msgs = HubStore.getChat(channelId);
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        return {
+          id: channelId,
+          name: u.name,
+          member: u,
+          msgCount: msgs.length,
+          lastMsg,
+        };
+      });
+  }, [users, currentUser]);
 
   // Active channel/DM state
   const [active, setActive] = useState<string>(() => {
@@ -305,14 +312,39 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
                 key={d.id}
                 className={active === d.id ? "active" : ""}
                 onClick={() => setActive(d.id)}
+                style={{ position: "relative" }}
               >
                 <Avatar initials={d.member.initials} color={d.member.color} avatarUrl={d.member.avatarUrl} size="sm" />
-                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2 }}>
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2, flex: 1, minWidth: 0 }}>
                   <strong style={{ fontSize: "12px", fontWeight: 600 }}>{d.name}</strong>
-                  <small style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>
-                    {d.member.title}
+                  <small
+                    style={{
+                      fontSize: "10px",
+                      color: d.lastMsg ? "var(--foreground)" : "var(--muted-foreground)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      width: "100%",
+                    }}
+                  >
+                    {d.lastMsg ? `${d.lastMsg.author === currentUser.name ? "You: " : ""}${d.lastMsg.text}` : d.member.title}
                   </small>
                 </span>
+                {d.msgCount > 0 && (
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      background: active === d.id ? "oklch(0.53 0.23 292)" : "var(--muted)",
+                      color: active === d.id ? "#fff" : "var(--muted-foreground)",
+                      borderRadius: "10px",
+                      padding: "1px 6px",
+                      marginLeft: "auto",
+                    }}
+                  >
+                    {d.msgCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -423,6 +455,7 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
           {/* Conversation Messages */}
           <ChatConversation
             messages={messages}
+            channelId={active}
             currentUser={currentUser}
             users={users}
             placeholder={
@@ -564,6 +597,7 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
 
 function ChatConversation({
   messages,
+  channelId,
   currentUser,
   users,
   placeholder,
@@ -571,6 +605,7 @@ function ChatConversation({
   onSend,
 }: {
   messages: ChatMessage[];
+  channelId: string;
   currentUser: UserProfile;
   users: UserProfile[];
   placeholder: string;
@@ -608,9 +643,23 @@ function ChatConversation({
                   size="sm"
                 />
               )}
-              <div>
-                <span>
+              <div className="msg-content-wrap">
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                   {isOwn ? "You" : m.author} · {m.time}
+                  {(isOwn || currentUser.role === "founder") && (
+                    <button
+                      className="chat-msg-del"
+                      title="Delete message"
+                      onClick={() => {
+                        if (confirm("Delete this message?")) {
+                          HubStore.deleteChatMessage(m.channelId || channelId, m.id);
+                          toast.success("Message deleted");
+                        }
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
                 </span>
                 <p>{m.text}</p>
               </div>

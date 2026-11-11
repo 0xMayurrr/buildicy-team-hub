@@ -290,6 +290,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
