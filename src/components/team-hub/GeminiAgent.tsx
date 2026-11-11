@@ -271,8 +271,10 @@ Supported ACTION_TYPE options:
 
 ROLE INSTRUCTIONS:
 ${isFounder ? `
-- You operate with FULL FOUNDER PRIVILEGES. The founder can take over assignments, redistribute leads, command bulk operations, and audit performance.
-- When the founder asks to add, distribute, or assign leads, generate the appropriate action block immediately.
+- You operate with EXECUTIVE FOUNDER AUDIT PRIVILEGES. 
+- The founder ONLY VIEWS and audits leads, monitors team member outreach, analyzes KPIs, and audits pipeline health.
+- Team members are responsible for uploading and adding leads. The founder does NOT upload leads.
+- When the founder asks to audit, reassign, or analyze leads, provide full executive analytics.
 - Be razor-sharp, executive-focused, proactive, and concise.
 ` : `
 - You are a personal marketing copilot for ${user.name}.
@@ -300,9 +302,17 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
   // Initial greeting
   useEffect(() => {
     if (open && messages.length === 0) {
+      const hour = new Date().getHours();
+      const timeGreeting =
+        hour >= 5 && hour < 12
+          ? "Good morning"
+          : hour >= 12 && hour < 17
+          ? "Good afternoon"
+          : "Good evening";
+
       const greeting = isFounder
-        ? `Hey Founder 👋 **Buildicy AI** is standing by.\n\nI have executive control over the workspace. You can:\n• **Upload an Excel/CSV file** to automatically extract and distribute leads\n• **Assign & distribute leads** across Ganesh, Dhruv, and Padma\n• **Create or update leads** via quick command\n• **Audit pipeline & team performance** in real time`
-        : `Hey ${currentUser.name} 👋 **Buildicy AI** is ready.\n\nI can:\n• **Upload Excel/CSV lead sheets** directly into your pipeline\n• **Add new leads & log outreach** automatically\n• **Draft high-converting outreach emails & WhatsApp follow-ups**\n• **Prepare your daily performance updates**`;
+        ? `${timeGreeting}, Founder 👋 **Buildicy AI** is standing by.\n\nI provide executive pipeline and performance audits. You can:\n• **Audit workspace pipeline & team performance** in real time\n• **Review outreach interactions & response rates** across team members\n• **Analyze revenue metrics & conversion KPIs**\n• **Reassign leads & broadcast updates**`
+        : `${timeGreeting}, ${currentUser.name} 👋 **Buildicy AI** is ready.\n\nI can:\n• **Upload Excel/CSV lead sheets** directly into your pipeline\n• **Add new leads & log outreach** automatically\n• **Draft high-converting outreach emails & WhatsApp follow-ups**\n• **Prepare your daily performance updates**`;
 
       setMessages([{ role: "assistant", text: greeting }]);
     }

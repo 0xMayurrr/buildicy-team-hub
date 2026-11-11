@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Mail, Phone, MessageSquare, Calendar, Linkedin, MoreHorizontal, Send, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { OUTREACH_CHANNELS, PROSPECT_RESPONSES } from "./performance-constants";
 interface OutreachDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: Lead;
+  lead?: Lead | undefined;
   currentUser: UserProfile;
   onSuccess?: () => void;
 }
@@ -42,10 +42,21 @@ export function OutreachDialog({
   currentUser,
   onSuccess,
 }: OutreachDialogProps) {
+  const allLeads = HubStore.getLeads();
+  const availableLeads = allLeads.filter(
+    (l) =>
+      currentUser.role === "founder" ||
+      l.ownerId === currentUser.id ||
+      (l.ownerName || "").toLowerCase().includes((currentUser.name || "").toLowerCase()),
+  );
+
+  const [selectedLeadId, setSelectedLeadId] = useState<string>(lead?.id || availableLeads[0]?.id || "");
+  const activeLead = lead || availableLeads.find((l) => l.id === selectedLeadId) || availableLeads[0];
+
   const [channel, setChannel] = useState<OutreachChannel>("Email");
   const [prospectResponse, setProspectResponse] = useState<ProspectResponse>("Positive response");
   const [statusAtTime, setStatusAtTime] = useState<LeadStatus>(
-    lead.status === "New" ? "Contacted" : lead.status,
+    activeLead?.status === "New" ? "Contacted" : activeLead?.status || "Contacted",
   );
   const [notes, setNotes] = useState("");
   const [nextFollowupDate, setNextFollowupDate] = useState(
@@ -53,8 +64,23 @@ export function OutreachDialog({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Sync when lead or open state changes
+  useEffect(() => {
+    if (lead) {
+      setSelectedLeadId(lead.id);
+      setStatusAtTime(lead.status === "New" ? "Contacted" : lead.status);
+    } else if (availableLeads.length > 0 && !selectedLeadId) {
+      setSelectedLeadId(availableLeads[0]!.id);
+      setStatusAtTime(availableLeads[0]!.status === "New" ? "Contacted" : availableLeads[0]!.status);
+    }
+  }, [lead, open, availableLeads]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!activeLead) {
+      toast.error("Please add or select a lead first.");
+      return;
+    }
     if (!notes.trim()) {
       toast.error("Please add outreach notes describing the interaction.");
       return;
@@ -66,7 +92,7 @@ export function OutreachDialog({
       const isPositive = selectedResp ? selectedResp.isPositive : false;
 
       HubStore.addOutreach({
-        leadId: lead.id,
+        leadId: activeLead.id,
         userId: currentUser.id,
         userName: currentUser.name,
         userInitials: currentUser.initials,
@@ -79,7 +105,7 @@ export function OutreachDialog({
         nextFollowupDate: nextFollowupDate || undefined,
       });
 
-      toast.success(`${channel} outreach logged for ${lead.name}`);
+      toast.success(`${channel} outreach logged for ${activeLead.name}!`);
       setNotes("");
       onOpenChange(false);
       onSuccess?.();
@@ -96,11 +122,55 @@ export function OutreachDialog({
         <DialogHeader>
           <DialogTitle>Log Outreach Interaction</DialogTitle>
           <DialogDescription>
-            Record touchpoints, prospect reactions, and next follow-up for <strong>{lead.name}</strong> ({lead.company}).
+            {activeLead ? (
+              <>
+                Record touchpoints, prospect reactions, and next follow-up for <strong>{activeLead.name}</strong> ({activeLead.company}).
+              </>
+            ) : (
+              "Log touchpoints across your assigned leads."
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="lead-form">
+          {/* Select Lead if not preselected */}
+          {!lead && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
+                Target Lead / Prospect
+              </label>
+              {availableLeads.length > 0 ? (
+                <select
+                  value={selectedLeadId}
+                  onChange={(e) => {
+                    setSelectedLeadId(e.target.value);
+                    const l = availableLeads.find((x) => x.id === e.target.value);
+                    if (l) setStatusAtTime(l.status === "New" ? "Contacted" : l.status);
+                  }}
+                  style={{
+                    width: "100%",
+                    height: "38px",
+                    borderRadius: "8px",
+                    padding: "0 10px",
+                    background: "var(--input)",
+                    border: "1px solid var(--border)",
+                    fontSize: "13px",
+                  }}
+                >
+                  {availableLeads.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} — {l.company} ({l.status})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>
+                  No leads assigned to you yet. Create or import a lead first.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Communication Channel */}
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "8px" }}>

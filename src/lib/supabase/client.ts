@@ -85,6 +85,25 @@ export class SupabaseClient {
     }
   }
 
+  // Supabase Auth: Sign Up New User
+  public async signUp(email: string, password: string, data?: any) {
+    if (!this.config.isConfigured) return null;
+    try {
+      const res = await fetch(`${this.config.url}/auth/v1/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: this.config.anonKey,
+        },
+        body: JSON.stringify({ email, password, data }),
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn("Supabase Auth signUp notice:", err);
+      return null;
+    }
+  }
+
   // Supabase PostgREST: Query table
   public async select<T>(table: string, queryParams: string = ""): Promise<T[] | null> {
     if (!this.config.isConfigured) return null;
@@ -100,6 +119,30 @@ export class SupabaseClient {
       return (await res.json()) as T[];
     } catch (err) {
       console.warn(`Supabase select error on ${table}:`, err);
+      return null;
+    }
+  }
+
+  // Supabase PostgREST: Upsert record(s)
+  public async upsert<T>(table: string, payload: any, onConflict: string = "id"): Promise<T | null> {
+    if (!this.config.isConfigured) return null;
+    try {
+      const url = `${this.config.url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...this.getHeaders(),
+          Prefer: "resolution=merge-duplicates,return=representation",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        throw new Error(`Upsert into ${table} failed: ${res.statusText}`);
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data[0] : data;
+    } catch (err) {
+      console.warn(`Supabase upsert error on ${table}:`, err);
       return null;
     }
   }

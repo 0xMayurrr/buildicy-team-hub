@@ -93,17 +93,37 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
     }
   }, [visibleChannels, dmContacts, active]);
 
-  // Listen for storage updates (new messages, channel additions)
+  // Listen for storage updates and multi-tab messages
   useEffect(() => {
-    const onStorage = () => {
+    const onUpdate = () => {
       setChannels(HubStore.getChannels());
       setRefreshCount((c) => c + 1);
     };
-    window.addEventListener("buildicy_storage_update", onStorage);
-    window.addEventListener("storage", onStorage);
+
+    window.addEventListener("buildicy_storage_update", onUpdate);
+    window.addEventListener("storage", onUpdate);
+
+    let bus: BroadcastChannel | null = null;
+    try {
+      bus = new BroadcastChannel("buildicy_hub_bus");
+      bus.onmessage = () => {
+        onUpdate();
+      };
+    } catch {}
+
+    // Polling sync with remote Supabase for cross-device / incognito messaging
+    HubStore.syncFromSupabase();
+    const interval = setInterval(() => {
+      HubStore.syncFromSupabase();
+    }, 1500);
+
     return () => {
-      window.removeEventListener("buildicy_storage_update", onStorage);
-      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("buildicy_storage_update", onUpdate);
+      window.removeEventListener("storage", onUpdate);
+      clearInterval(interval);
+      try {
+        bus?.close();
+      } catch {}
     };
   }, []);
 
@@ -449,6 +469,25 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
                   Delete Group
                 </Button>
               )}
+
+              {/* Clear conversation messages button */}
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm("Are you sure you want to clear all messages in this conversation?")) {
+                      HubStore.clearChatChannel(active);
+                      toast.success("Conversation cleared.");
+                    }
+                  }}
+                  style={{ color: "var(--destructive)", height: "30px", fontSize: "11px" }}
+                  title="Clear all messages"
+                >
+                  <Trash2 size={13} style={{ marginRight: "4px" }} />
+                  Clear Chat
+                </Button>
+              )}
             </div>
           </div>
 
@@ -646,20 +685,18 @@ function ChatConversation({
               <div className="msg-content-wrap">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                   {isOwn ? "You" : m.author} · {m.time}
-                  {(isOwn || currentUser.role === "founder") && (
-                    <button
-                      className="chat-msg-del"
-                      title="Delete message"
-                      onClick={() => {
-                        if (confirm("Delete this message?")) {
-                          HubStore.deleteChatMessage(m.channelId || channelId, m.id);
-                          toast.success("Message deleted");
-                        }
-                      }}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
+                  <button
+                    className="chat-msg-del"
+                    title="Delete message"
+                    onClick={() => {
+                      if (confirm("Delete this message?")) {
+                        HubStore.deleteChatMessage(m.channelId || channelId, m.id);
+                        toast.success("Message deleted");
+                      }
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </span>
                 <p>{m.text}</p>
               </div>

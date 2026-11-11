@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Sync latest created users & credentials from Supabase on mount
+  useEffect(() => {
+    HubStore.syncFromSupabase();
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -47,9 +52,19 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   return (
     <div className="login-minimal-shell">
-      {/* Ambient background glows */}
-      <div className="login-ambient-glow" />
-      <div className="login-ambient-glow-secondary" />
+      {/* Background Light Design & Atmosphere */}
+      <div className="login-light-backdrop" aria-hidden="true">
+        <div className="login-grid-pattern" />
+        <div className="login-aurora-beam" />
+        <div className="login-ambient-orb login-orb-primary" />
+        <div className="login-ambient-orb login-orb-secondary" />
+        <div className="login-ambient-orb login-orb-accent" />
+        <div className="login-concentric-rings">
+          <div className="login-ring ring-1" />
+          <div className="login-ring ring-2" />
+          <div className="login-ring ring-3" />
+        </div>
+      </div>
 
       <div className="login-minimal-card">
         {/* Brand Logo */}

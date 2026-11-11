@@ -2179,47 +2179,180 @@
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
-  background-color: oklch(0.985 0.005 285);
+  background: radial-gradient(130% 110% at 50% 0%, #fbf9ff 0%, #f7f4fc 40%, #f0ebf8 100%);
   overflow: hidden;
 }
 
-.login-ambient-glow {
+/* Background Light Design & Atmosphere */
+.login-light-backdrop {
   position: absolute;
-  top: 15%;
-  right: 25%;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+/* Subtle Geometric Dot Grid */
+.login-grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(oklch(0.53 0.23 292 / 0.13) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, black 25%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 42%, black 25%, transparent 80%);
+  opacity: 0.9;
+}
+
+/* Luminous Top Aurora Spotlight */
+.login-aurora-beam {
+  position: absolute;
+  top: -160px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 960px;
+  height: 560px;
+  background: radial-gradient(ellipse 70% 55% at 50% 30%, oklch(0.53 0.23 292 / 0.22) 0%, oklch(0.65 0.20 270 / 0.12) 40%, transparent 72%);
+  filter: blur(55px);
+  animation: auroraPulse 9s ease-in-out infinite alternate;
+}
+
+/* Radiant Ambient Glow Orbs */
+.login-ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.login-orb-primary {
+  top: 18%;
+  right: 18%;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, oklch(0.55 0.24 290 / 0.15) 0%, oklch(0.65 0.18 275 / 0.07) 50%, transparent 70%);
+  filter: blur(70px);
+  animation: orbFloat1 13s ease-in-out infinite alternate;
+}
+
+.login-orb-secondary {
+  bottom: 8%;
+  left: 14%;
   width: 480px;
   height: 480px;
-  border-radius: 50%;
-  background: radial-gradient(circle, oklch(0.53 0.23 292 / 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.62 0.20 260 / 0.13) 0%, oklch(0.70 0.14 285 / 0.06) 50%, transparent 70%);
+  filter: blur(80px);
+  animation: orbFloat2 16s ease-in-out infinite alternate;
+}
+
+.login-orb-accent {
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, oklch(0.70 0.18 305 / 0.11) 0%, transparent 65%);
   filter: blur(60px);
-  pointer-events: none;
+  animation: orbFloat3 11s ease-in-out infinite alternate;
 }
 
-.login-ambient-glow-secondary {
+/* Concentric Light Rings (Echoing Buildicy Top Portal) */
+.login-concentric-rings {
   position: absolute;
-  bottom: 10%;
-  left: 20%;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: radial-gradient(circle, oklch(0.65 0.18 250 / 0.08) 0%, transparent 70%);
-  filter: blur(70px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 760px;
+  height: 760px;
   pointer-events: none;
 }
 
+.login-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid oklch(0.53 0.23 292 / 0.08);
+  mask-image: radial-gradient(circle, black 35%, transparent 75%);
+  -webkit-mask-image: radial-gradient(circle, black 35%, transparent 75%);
+}
+
+.login-ring.ring-1 {
+  width: 360px;
+  height: 360px;
+  border-color: oklch(0.53 0.23 292 / 0.14);
+}
+
+.login-ring.ring-2 {
+  width: 540px;
+  height: 540px;
+  border-color: oklch(0.53 0.23 292 / 0.08);
+  border-style: dashed;
+}
+
+.login-ring.ring-3 {
+  width: 720px;
+  height: 720px;
+  border-color: oklch(0.65 0.18 260 / 0.05);
+}
+
+/* Animations */
+@keyframes auroraPulse {
+  0% {
+    transform: translateX(-50%) scale(0.95);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-50%) scale(1.05);
+    opacity: 1;
+  }
+}
+
+@keyframes orbFloat1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-35px, 30px) scale(1.08);
+  }
+}
+
+@keyframes orbFloat2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(40px, -35px) scale(1.06);
+  }
+}
+
+@keyframes orbFloat3 {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* Glassmorphism Card with Inner Rim Light */
 .login-minimal-card {
   position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 410px;
-  background: color-mix(in oklab, var(--card) 92%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid oklch(0.90 0.015 282);
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid color-mix(in oklab, var(--primary) 18%, rgba(255, 255, 255, 0.85));
   border-radius: 24px;
   padding: 40px 34px 32px;
   box-shadow: 
-    0 4px 6px -1px oklch(0.2 0.05 280 / 0.02),
-    0 24px 48px -12px oklch(0.2 0.05 280 / 0.07);
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 4px 16px -2px oklch(0.53 0.23 292 / 0.06),
+    0 24px 50px -12px oklch(0.53 0.23 292 / 0.12),
+    0 40px 80px -20px oklch(0.2 0.05 280 / 0.08);
 }
 
 .login-minimal-brand {

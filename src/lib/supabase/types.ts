@@ -24,6 +24,7 @@ export interface UserProfile {
   statusUpdatedAt?: string | undefined;
   avatarUrl?: string | undefined;
   avatarChosen?: boolean | undefined;
+  fcmToken?: string | undefined;
 }
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Proposal" | "Won" | "Lost";

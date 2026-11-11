@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -14,12 +14,14 @@ import {
   Mail,
   Phone,
   MessageSquare,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { HubStore } from "@/lib/supabase/store";
 import type { UserProfile, WorkingStatus, DailyWorkUpdate } from "@/lib/supabase/types";
 import { WORKING_STATUS_CONFIG, getWorkingStatusConfig } from "./performance-constants";
+import { OutreachDialog } from "./OutreachDialog";
 
 interface MemberUpdatesProps {
   currentUser: UserProfile;
@@ -45,6 +47,18 @@ export function MemberUpdates({ currentUser }: MemberUpdatesProps) {
   const [tomorrowPriorities, setTomorrowPriorities] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [outreachModalOpen, setOutreachModalOpen] = useState(false);
+  const [, setVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setVersion((v) => v + 1);
+    window.addEventListener("buildicy_storage_update", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("buildicy_storage_update", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
 
   // Auto-calculated live statistics for today (Requirement 6: No manual entry of existing numbers!)
   const todayMetrics = HubStore.getMemberPerformanceMetrics(currentUser.id, "today");
@@ -160,14 +174,26 @@ export function MemberUpdates({ currentUser }: MemberUpdatesProps) {
       </div>
 
       {/* 2. Today's Auto-Aggregated Counters (Zero duplicate manual entry) */}
-      <div style={{ margin: "16px 0 8px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--foreground)" }}>
-            Today's Activity Metrics (Calculated Live)
-          </span>
-          <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
-            Auto-derived from logged outreach & leads
-          </span>
+      <div style={{ margin: "20px 0 8px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+          <div>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--foreground)", display: "block" }}>
+              Today's Activity Metrics (Calculated Live)
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
+              Auto-derived from your logged calls, WhatsApp, emails & meetings
+            </span>
+          </div>
+          <Button
+            type="button"
+            className="primary-pill"
+            size="sm"
+            onClick={() => setOutreachModalOpen(true)}
+            style={{ fontSize: "11px", height: "32px", padding: "0 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <Send size={12} />
+            + Log Outreach (Call / WhatsApp / Email / Meeting)
+          </Button>
         </div>
 
         <div className="daily-counters-grid">
@@ -339,6 +365,13 @@ export function MemberUpdates({ currentUser }: MemberUpdatesProps) {
           )}
         </div>
       )}
+      {/* Outreach Dialog */}
+      <OutreachDialog
+        open={outreachModalOpen}
+        onOpenChange={setOutreachModalOpen}
+        currentUser={currentUser}
+        onSuccess={() => setVersion((v) => v + 1)}
+      />
     </section>
   );
 }

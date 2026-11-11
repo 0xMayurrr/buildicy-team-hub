@@ -80,6 +80,17 @@ import {
 export type View = "founder" | "member" | "leads" | "lead" | "reports" | "chat" | "notifications" | "team";
 const statuses: LeadStatus[] = ["New", "Contacted", "Qualified", "Proposal", "Won", "Lost"];
 
+export function getTimeBasedGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) {
+    return "Good morning,";
+  }
+  if (hour >= 12 && hour < 17) {
+    return "Good afternoon,";
+  }
+  return "Good evening,";
+}
+
 export function TeamHubApp() {
   const [mounted, setMounted] = useState(false);
   const { currentUser, users, leads, activities, notifications, unreadCount } = useHubState();
@@ -91,6 +102,14 @@ export function TeamHubApp() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [currency, setCurrencyState] = useState<"USD" | "INR">(() => HubStore.getCurrency());
+  const [greeting, setGreeting] = useState<string>(() => getTimeBasedGreeting());
+
+  useEffect(() => {
+    const updateGreeting = () => setGreeting(getTimeBasedGreeting());
+    updateGreeting();
+    const interval = setInterval(updateGreeting, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Compulsory avatar selection on first login / onboarding (strictly for team members, founder is exempt)
   // Once chosen, it is permanently saved in localStorage and user profile, never prompting again
@@ -253,7 +272,7 @@ export function TeamHubApp() {
           </button>
         </div>
         <div className="welcome-copy">
-          <p>Good morning,</p>
+          <p>{greeting}</p>
           <h2>{currentUser.name} 👋</h2>
           <span style={{ fontSize: "11px", color: "var(--muted-foreground)", display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "oklch(0.6 0.18 150)" }}></span>
@@ -389,10 +408,12 @@ export function TeamHubApp() {
             <button className="round-action desktop-only" aria-label="Settings">
               <Settings />
             </button>
-            <Button className="primary-pill desktop-only" onClick={() => setAddOpen(true)}>
-              <Plus />
-              New lead
-            </Button>
+            {currentUser.role !== "founder" && (
+              <Button className="primary-pill desktop-only" onClick={() => setAddOpen(true)}>
+                <Plus />
+                New lead
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger className="profile-button">
                 {currentUser.role === "founder" ? (
@@ -506,7 +527,7 @@ export function TeamHubApp() {
           ) : null}
           {view === "chat" && <TeamChat currentUser={currentUser} users={users} />}
           {view === "notifications" && (
-            <Notifications openLead={openLead} notifications={notifications} />
+            <Notifications openLead={openLead} notifications={notifications} currentUser={currentUser} go={go} />
           )}
           {view === "team" && currentUser.role === "founder" && (
             <TeamManagement users={users} />
@@ -514,17 +535,19 @@ export function TeamHubApp() {
         </div>
       </main>
 
-      <AddLeadDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        currentUser={currentUser}
-        users={users}
-        onAdd={(lead) => {
-          setSelectedId(lead.id);
-          go("leads");
-          toast.success(`${lead.name} was created & assigned to ${lead.ownerName}`);
-        }}
-      />
+      {currentUser && currentUser.role !== "founder" && (
+        <AddLeadDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          currentUser={currentUser}
+          users={users}
+          onAdd={(lead) => {
+            setSelectedId(lead.id);
+            go("leads");
+            toast.success(`${lead.name} was created & assigned to ${lead.ownerName}`);
+          }}
+        />
+      )}
 
       {mounted && currentUser && currentUser.role !== "founder" && (
         <AvatarPickerModal
@@ -599,10 +622,16 @@ function FounderDashboard({
   const maxActivity = Math.max(...weekCounts, 1);
   const totalTouchpoints = activities.length;
 
+  const todayFormatted = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   return (
     <>
       <PageTitle
-        eyebrow="Wednesday, 11 November"
+        eyebrow={todayFormatted}
         title="Team performance"
         description="A calm overview of your pipeline, people and priorities."
         action={
@@ -898,10 +927,16 @@ function MemberDashboard({
   const myFollowups = mine.filter((l) => Boolean(l.nextFollowupDate));
   const recentOutreach = HubStore.getOutreach({ userId: currentUser.id }).slice(0, 4);
 
+  const todayFormatted = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   return (
     <>
       <PageTitle
-        eyebrow={`${currentUser.name}'s Workspace`}
+        eyebrow={`${currentUser.name}'s Workspace · ${todayFormatted}`}
         title="My Daily Workspace"
         description="Your live outreach updates, assigned leads, and daily reporting."
       />
@@ -1033,19 +1068,27 @@ function LeadsView({
   );
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
-  const filtered = useMemo(() => {
+  // Founder always oversees the entire team pipeline (no personal assignment filter)
+  const effectiveOwnerFilter = currentUser.role === "founder" ? "all" : ownerFilter;
+
+  const baseLeads = useMemo(() => {
     return leads.filter((l) => {
-      const matchStatus = status === "All" || l.status === status;
       const matchQuery = `${l.name || ""} ${l.company || ""} ${l.email || ""} ${l.ownerName || ""}`
         .toLowerCase()
         .includes(query.toLowerCase());
       const matchOwner =
-        ownerFilter === "all" ||
+        effectiveOwnerFilter === "all" ||
         l.ownerId === currentUser.id ||
         (l.ownerName || "").toLowerCase().includes((currentUser.name || "").toLowerCase());
-      return matchStatus && matchQuery && matchOwner;
+      return matchQuery && matchOwner;
     });
-  }, [leads, query, status, ownerFilter, currentUser]);
+  }, [leads, query, effectiveOwnerFilter, currentUser]);
+
+  const filtered = useMemo(() => {
+    return baseLeads.filter((l) => {
+      return status === "All" || l.status === status;
+    });
+  }, [baseLeads, status]);
 
   const isAllSelected = filtered.length > 0 && selectedLeads.length === filtered.length;
 
@@ -1113,33 +1156,37 @@ function LeadsView({
       <PageTitle
         eyebrow="Pipeline"
         title="Leads"
-        description={`${filtered.length} leads · ${formatMoney(
-          filtered.reduce((s, l) => s + (Number(l.value) || 0), 0),
-        )} value`}
+        description={`${baseLeads.length} total lead${baseLeads.length === 1 ? "" : "s"} ${status !== "All" ? `(${filtered.length} in ${status})` : ""} · ${formatMoney(
+          baseLeads.reduce((s, l) => s + (Number(l.value) || 0), 0),
+        )} pipeline value`}
         action={
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <div className="segmented" style={{ height: "36px" }}>
-              <button
-                className={ownerFilter === "mine" ? "active" : ""}
-                onClick={() => setOwnerFilter("mine")}
-              >
-                My leads
-              </button>
-              <button
-                className={ownerFilter === "all" ? "active" : ""}
-                onClick={() => setOwnerFilter("all")}
-              >
-                All team leads
-              </button>
-            </div>
+            {currentUser.role !== "founder" && (
+              <div className="segmented" style={{ height: "36px" }}>
+                <button
+                  className={effectiveOwnerFilter === "mine" ? "active" : ""}
+                  onClick={() => setOwnerFilter("mine")}
+                >
+                  My leads
+                </button>
+                <button
+                  className={effectiveOwnerFilter === "all" ? "active" : ""}
+                  onClick={() => setOwnerFilter("all")}
+                >
+                  All team leads
+                </button>
+              </div>
+            )}
             <Button variant="outline" className="desktop-only" onClick={exportCSV}>
               <Download style={{ width: "14px", height: "14px", marginRight: "6px" }} />
               Export CSV
             </Button>
-            <Button className="primary-pill" onClick={openAdd}>
-              <Plus />
-              Add lead
-            </Button>
+            {currentUser.role !== "founder" && (
+              <Button className="primary-pill" onClick={openAdd}>
+                <Plus />
+                Add lead
+              </Button>
+            )}
           </div>
         }
       />
@@ -1217,7 +1264,7 @@ function LeadsView({
           {(["All", ...statuses] as const).map((s) => (
             <button key={s} className={status === s ? "active" : ""} onClick={() => setStatus(s)}>
               {s}
-              <span>{s === "All" ? filtered.length : filtered.filter((l) => l.status === s).length}</span>
+              <span>{s === "All" ? baseLeads.length : baseLeads.filter((l) => l.status === s).length}</span>
             </button>
           ))}
         </div>
@@ -1345,6 +1392,8 @@ function AddLeadDialog({
   users: UserProfile[];
   onAdd: (lead: Lead) => void;
 }) {
+  if (currentUser.role === "founder") return null;
+
   const [selectedOwnerId, setSelectedOwnerId] = useState(currentUser.id);
   const [uploadTab, setUploadTab] = useState<"manual" | "import">("manual");
   const [importing, setImporting] = useState(false);
@@ -1627,20 +1676,6 @@ function AddLeadDialog({
               style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) parseAndImport(f); }}
             />
-            {currentUser.role === "founder" && (
-              <div style={{ marginTop: "14px" }}>
-                <p style={{ fontSize: "11px", fontWeight: 600, marginBottom: "6px" }}>Assign imported leads to:</p>
-                <select
-                  value={selectedOwnerId}
-                  onChange={(e) => setSelectedOwnerId(e.target.value)}
-                  style={{ width: "100%", height: "38px", borderRadius: "8px", padding: "0 10px", background: "var(--input)", border: "1px solid var(--border)", fontSize: "12px" }}
-                >
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} — {u.title}</option>
-                  ))}
-                </select>
-              </div>
-            )}
             <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--muted)", borderRadius: "8px", fontSize: "11px", color: "var(--muted-foreground)" }}>
               ✨ <strong>Universal Import:</strong> Works with any file headers or columns. Leads will be directly assigned and synced into your workspace pipeline.
             </div>
@@ -1697,22 +1732,6 @@ function AddLeadDialog({
             Why is this prospect promising?
             <Input name="promisingReason" placeholder="e.g. Expanding sales team, actively seeking agency partners" />
           </label>
-          {currentUser.role === "founder" && (
-            <label style={{ gridColumn: "1 / -1" }}>
-              Assign to team member
-              <select
-                value={selectedOwnerId}
-                onChange={(e) => setSelectedOwnerId(e.target.value)}
-                style={{ width: "100%", height: "40px", borderRadius: "8px", padding: "0 10px", background: "var(--input)" }}
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} — {u.title} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <DialogFooter className="form-footer">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -2217,10 +2236,33 @@ function LeadConversation({
 function Notifications({
   openLead,
   notifications,
+  currentUser,
+  go,
 }: {
   openLead: (id: string) => void;
   notifications: any[];
+  currentUser: UserProfile;
+  go: (v: View) => void;
 }) {
+  const [pushEnabled, setPushEnabled] = useState(() => !!HubStore.getCurrentUser()?.fcmToken);
+  const [enabling, setEnabling] = useState(false);
+
+  const handleEnablePush = async () => {
+    setEnabling(true);
+    const success = await HubStore.saveFcmToken(currentUser.id);
+    if (success) {
+      setPushEnabled(true);
+      toast.success("Push notifications enabled! You'll get alerts on this device even when the app is closed.");
+    } else {
+      toast.error("Permission denied or browser not supported. Please allow notifications in your browser settings.");
+    }
+    setEnabling(false);
+  };
+
+  const userNotifications = notifications.filter(
+    (n) => !n.userId || n.userId === "all" || n.userId === currentUser.id || n.userId === currentUser.email,
+  );
+
   return (
     <>
       <PageTitle
@@ -2228,19 +2270,41 @@ function Notifications({
         title="Notifications"
         description="Updates that need your attention across the workspace."
         action={
-          <Button
-            variant="outline"
-            onClick={() => {
-              HubStore.markNotificationRead();
-              toast.success("All notifications marked as read");
-            }}
-          >
-            Mark all as read
-          </Button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button
+              variant={pushEnabled ? "outline" : "default"}
+              className={pushEnabled ? "" : "primary-pill"}
+              onClick={handleEnablePush}
+              disabled={enabling || pushEnabled}
+            >
+              <Bell size={13} style={{ marginRight: "6px" }} />
+              {enabling ? "Enabling..." : pushEnabled ? "Push Enabled ✓" : "Enable Push Notifications"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                HubStore.markNotificationRead();
+                toast.success("All notifications marked as read");
+              }}
+            >
+              Mark all as read
+            </Button>
+            <Button
+              variant="ghost"
+              style={{ color: "var(--destructive)" }}
+              onClick={() => {
+                HubStore.clearAllNotifications();
+                toast.success("Notification inbox cleared");
+              }}
+            >
+              <Trash2 size={13} style={{ marginRight: "4px" }} />
+              Clear all
+            </Button>
+          </div>
         }
       />
       <section className="panel notification-panel">
-        {notifications.map((n) => (
+        {userNotifications.map((n) => (
           <button
             key={n.id}
             className={n.isRead ? "notification read" : "notification"}
@@ -2248,6 +2312,8 @@ function Notifications({
               HubStore.markNotificationRead(n.id);
               if (n.leadId) {
                 openLead(n.leadId);
+              } else if (n.title.toLowerCase().includes("message") || n.title.toLowerCase().includes("chat")) {
+                go("chat");
               }
             }}
           >
@@ -2261,7 +2327,7 @@ function Notifications({
             <time>{n.time}</time>
           </button>
         ))}
-        {notifications.length === 0 && (
+        {userNotifications.length === 0 && (
           <p style={{ textAlign: "center", padding: "24px 0", color: "var(--muted-foreground)" }}>
             Inbox zero! You're completely up to date.
           </p>
