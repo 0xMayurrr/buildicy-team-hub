@@ -170,6 +170,10 @@
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
   background: var(--background);
+  transition: grid-template-columns 0.22s ease;
+}
+.hub-shell:has([data-sidebar]:not(:hover):not(.is-open)) {
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 .hub-sidebar {
   position: sticky;
@@ -181,17 +185,48 @@
   background: var(--sidebar);
   border-right: 1px solid var(--sidebar-border);
   z-index: 30;
+  overflow: hidden;
+  width: 264px;
+  transition: width 0.22s ease, padding 0.22s ease;
+}
+.hub-sidebar:not(:hover):not(.is-open) {
+  width: 68px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.hub-sidebar:not(:hover):not(.is-open) .welcome-copy,
+.hub-sidebar:not(:hover):not(.is-open) .hub-nav button span,
+.hub-sidebar:not(:hover):not(.is-open) .hub-nav button b,
+.hub-sidebar:not(:hover):not(.is-open) .sidebar-team,
+.hub-sidebar:not(:hover):not(.is-open) .brand-text {
+  display: none;
+}
+.hub-sidebar:not(:hover):not(.is-open) .hub-nav button {
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+.hub-sidebar:not(:hover):not(.is-open) .brand {
+  justify-content: center;
+}
+.hub-sidebar:not(:hover):not(.is-open) .brand-logo-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
 }
 .brand-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 0 4px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
+  min-width: 0;
 }
 .brand-mark {
   display: grid;
@@ -203,6 +238,10 @@
   color: var(--primary-foreground);
   font: 700 20px var(--font-display);
   box-shadow: 0 5px 12px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+.brand-text {
+  display: grid;
+  min-width: 0;
 }
 .brand strong,
 .brand small {
@@ -2842,12 +2881,42 @@
   object-fit: cover;
   display: block;
 }
+/* Import drop zone */
+.import-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--muted);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.import-drop-zone:hover {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+.import-drop-zone strong {
+  font-size: 13px;
+  color: var(--foreground);
+}
+.import-drop-zone span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Brand logo alignment */
 .brand-logo-img {
   width: 32px;
   height: 32px;
   object-fit: contain;
   border-radius: 8px;
   flex: none;
+  display: block;
 }
 .avatar-picker-dialog {
   max-width: 680px !important;

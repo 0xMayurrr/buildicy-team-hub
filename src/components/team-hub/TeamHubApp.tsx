@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ChevronDown,
   Download,
+  FileSpreadsheet,
   Filter,
   Hash,
   LayoutDashboard,
@@ -22,6 +23,7 @@ import {
   Settings,
   Target,
   TrendingUp,
+  Upload,
   UserCheck,
   UserPlus,
   Users,
@@ -215,7 +217,7 @@ export function TeamHubApp() {
 
   return (
     <div className="hub-shell">
-      <aside className={`hub-sidebar ${mobileNav ? "is-open" : ""}`}>
+      <aside className={`hub-sidebar ${mobileNav ? "is-open" : ""}`} data-sidebar>
         <div className="brand-row">
           <Brand />
           <button
@@ -475,7 +477,7 @@ export function TeamHubApp() {
 
 function Brand() {
   return (
-    <div className="brand" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+    <div className="brand">
       <img
         src="/buildicy-mark.png"
         alt="Buildicy Logo"
@@ -484,7 +486,7 @@ function Brand() {
           (e.currentTarget as HTMLImageElement).style.display = "none";
         }}
       />
-      <span>
+      <span className="brand-text">
         <strong>Buildicy</strong>
         <small>Team Hub</small>
       </span>
@@ -1162,6 +1164,64 @@ function AddLeadDialog({
   onAdd: (lead: Lead) => void;
 }) {
   const [selectedOwnerId, setSelectedOwnerId] = useState(currentUser.id);
+  const [uploadTab, setUploadTab] = useState<"manual" | "import">("manual");
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const parseAndImport = (file: File) => {
+    setImporting(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        if (lines.length < 2) { toast.error("File has no data rows."); setImporting(false); return; }
+        const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
+        const nameIdx = headers.findIndex((h) => h.includes("name"));
+        const companyIdx = headers.findIndex((h) => h.includes("company"));
+        const emailIdx = headers.findIndex((h) => h.includes("email"));
+        const phoneIdx = headers.findIndex((h) => h.includes("phone"));
+        const valueIdx = headers.findIndex((h) => h.includes("value") || h.includes("deal"));
+        const sourceIdx = headers.findIndex((h) => h.includes("source"));
+        if (nameIdx === -1) { toast.error("CSV must have a 'name' column."); setImporting(false); return; }
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+          const name = cols[nameIdx];
+          if (!name) continue;
+          const assignedUser = users.find((u) => u.id === selectedOwnerId) ?? currentUser;
+          const newLead = HubStore.addLead({
+            name,
+            company: companyIdx >= 0 ? cols[companyIdx] || "Independent" : "Independent",
+            email: emailIdx >= 0 ? cols[emailIdx] || "hello@example.com" : "hello@example.com",
+            phone: phoneIdx >= 0 ? cols[phoneIdx] || "Not added" : "Not added",
+            source: sourceIdx >= 0 ? cols[sourceIdx] || "Import" : "Import",
+            value: valueIdx >= 0 ? Number(cols[valueIdx]) || 0 : 0,
+            status: "New",
+            qualityPotential: "Medium potential",
+            ownerId: assignedUser.id,
+            ownerName: assignedUser.name,
+            initials: name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+            color: assignedUser.color,
+          });
+          onAdd(newLead);
+          count++;
+        }
+        toast.success(`${count} lead${count !== 1 ? "s" : ""} imported successfully!`);
+        onOpenChange(false);
+      } catch {
+        toast.error("Failed to parse file. Make sure it's a valid CSV.");
+      }
+      setImporting(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) parseAndImport(file);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1199,13 +1259,67 @@ function AddLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="hub-dialog">
+      <DialogContent className="hub-dialog" style={{ maxWidth: "560px" }}>
         <DialogHeader>
-          <DialogTitle>Add a new lead</DialogTitle>
+          <DialogTitle>Add leads</DialogTitle>
           <DialogDescription>
-            Capture lead essentials now with role-based ownership assignment & potential estimation.
+            Add manually or import from Excel / CSV / Google Sheets export.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Tab switcher */}
+        <div className="segmented" style={{ marginBottom: "16px", width: "fit-content" }}>
+          <button type="button" className={uploadTab === "manual" ? "active" : ""} onClick={() => setUploadTab("manual")}>Manual entry</button>
+          <button type="button" className={uploadTab === "import" ? "active" : ""} onClick={() => setUploadTab("import")}>
+            <FileSpreadsheet style={{ width: "12px", height: "12px", marginRight: "4px", display: "inline" }} />
+            Import file
+          </button>
+        </div>
+
+        {/* Import tab */}
+        {uploadTab === "import" && (
+          <div>
+            <div
+              className="import-drop-zone"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleFileDrop}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload style={{ width: "28px", height: "28px", color: "var(--primary)", marginBottom: "10px" }} />
+              <strong>Drop your file here or click to browse</strong>
+              <span>Supports .csv, .xlsx (save as CSV from Excel/Google Sheets)</span>
+              <span style={{ fontSize: "10px", color: "var(--muted-foreground)", marginTop: "4px" }}>
+                Required column: <code>name</code> · Optional: company, email, phone, value, source
+              </span>
+              {importing && <span style={{ color: "var(--primary)", fontSize: "12px", marginTop: "8px" }}>Importing...</span>}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,.ods,.tsv"
+              style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) parseAndImport(f); }}
+            />
+            <div style={{ marginTop: "14px" }}>
+              <p style={{ fontSize: "11px", fontWeight: 600, marginBottom: "6px" }}>Assign imported leads to:</p>
+              <select
+                value={selectedOwnerId}
+                onChange={(e) => setSelectedOwnerId(e.target.value)}
+                style={{ width: "100%", height: "38px", borderRadius: "8px", padding: "0 10px", background: "var(--input)", border: "1px solid var(--border)", fontSize: "12px" }}
+              >
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name} — {u.title}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginTop: "12px", padding: "10px 12px", background: "var(--muted)", borderRadius: "8px", fontSize: "11px", color: "var(--muted-foreground)" }}>
+              💡 <strong>Tip:</strong> In Excel or Google Sheets, go to <em>File → Download → CSV</em> and upload that file here.
+            </div>
+          </div>
+        )}
+
+        {/* Manual tab */}
+        {uploadTab === "manual" && (
         <form onSubmit={submit} className="lead-form">
           <label>
             Full name
@@ -1277,6 +1391,7 @@ function AddLeadDialog({
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
