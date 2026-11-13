@@ -37,6 +37,7 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -517,7 +518,7 @@ export function TeamHubApp() {
 
         <div className="hub-canvas">
           {view === "founder" && currentUser.role === "founder" && (
-            <FounderDashboard leads={leads} openLead={openLead} go={go} />
+            <FounderDashboard leads={leads} openLead={openLead} go={go} users={users} />
           )}
           {view === "member" && (
             <MemberDashboard
@@ -839,15 +840,21 @@ function FounderDashboard({
   leads,
   openLead,
   go,
+  users,
 }: {
   leads: Lead[];
   openLead: (id: string) => void;
   go: (v: View) => void;
+  users: UserProfile[];
 }) {
   const [range, setRange] = useState("week");
   const [inspectedMember, setInspectedMember] = useState<UserProfile | null>(null);
+  const [appointmentsModalOpen, setAppointmentsModalOpen] = useState(false);
   const activities = HubStore.getActivities();
-  const users = HubStore.getUsers();
+  const outreach = HubStore.getOutreach();
+  const realMeetings = outreach.filter(
+    (o) => o.channel === "Meeting" || o.prospectResponse === "Meeting booked"
+  );
 
   const totalValue = leads.reduce((sum, l) => sum + (Number(l.value) || 0), 0);
   const activeLeads = leads.filter((l) => !["Won", "Lost"].includes(l.status)).length;
@@ -912,11 +919,11 @@ function FounderDashboard({
         />
         <MetricCard
           label="Booked appointments"
-          value="4 Booked"
-          change="Live preview"
-          footnote="Click to open calendar.buildicy.com"
+          value={realMeetings.length > 0 ? `${realMeetings.length} Booked` : "0 Booked"}
+          change="calendar.buildicy.com"
+          footnote="Click to view booked appointments"
           icon={<CalendarClock />}
-          onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
+          onClick={() => setAppointmentsModalOpen(true)}
         />
         <MetricCard
           label="Conversion rate"
@@ -934,8 +941,73 @@ function FounderDashboard({
         />
       </div>
 
-      {/* Enhanced Member Performance Section */}
-      <section className="panel" style={{ padding: "20px 24px", marginBottom: "20px" }}>
+      {/* 1. Lead Activity & Team Leaderboard Grid (placed directly after Team Performance) */}
+      <div className="dashboard-grid" style={{ marginBottom: "24px" }}>
+        <section className="panel chart-panel">
+          <SectionHeading
+            title="Lead activity"
+            detail="Touchpoints logged by the team across the week"
+            action={<Segmented value={range} setValue={setRange} />}
+          />
+          <div className="bar-chart">
+            {weekDays.map((dayName, i) => {
+              const count = weekCounts[i] ?? 0;
+              const heightPct = count > 0 ? Math.max(16, Math.round((count / maxActivity) * 100)) : 8;
+              const isToday = i === currentDayIdx;
+              const isPeak = count === maxActivity && count > 0;
+              return (
+                <div key={dayName} className="bar-column">
+                  <span
+                    className={isToday || isPeak ? "bar active" : "bar"}
+                    style={{ height: `${heightPct}%` }}
+                    title={`${dayName}: ${count} touchpoints`}
+                  >
+                    {(isToday || isPeak) && (
+                      <em>
+                        {count} {count === 1 ? "action" : "actions"}
+                      </em>
+                    )}
+                  </span>
+                  <small>{dayName}</small>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="panel">
+          <SectionHeading title="Team leaderboard" detail="Active team members & win distribution" />
+          <div className="leaderboard">
+            {users
+              .filter((u) => u.role !== "founder")
+              .map((m, i) => {
+                const memberLeads = leads.filter((l) => l.ownerId === m.id || l.ownerName === m.name);
+                const memberWon = memberLeads.filter((l) => l.status === "Won").length;
+                const winPct = memberLeads.length > 0 ? Math.round((memberWon / memberLeads.length) * 100) : 0;
+                const totalVal = memberLeads.reduce((s, l) => s + (Number(l.value) || 0), 0);
+                const progressPct = leads.length > 0 ? Math.round((memberLeads.length / leads.length) * 100) : 0;
+                return (
+                  <div key={m.id || m.email}>
+                    <span className="rank">{i + 1}</span>
+                    <Avatar initials={m.initials} color={m.color} size="sm" avatarUrl={m.avatarUrl} />
+                    <p>
+                      <strong>{m.name}</strong>
+                      <small>
+                        {memberLeads.length} leads · {formatMoney(totalVal)} · {winPct}% win
+                      </small>
+                    </p>
+                    <span className="progress">
+                      <i style={{ width: `${Math.max(6, progressPct)}%` }} />
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </section>
+      </div>
+
+      {/* 2. Team Member Performance & Live Status (comes after Lead Activity) */}
+      <section className="panel" style={{ padding: "20px 24px", marginBottom: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
           <div>
             <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Team Member Performance & Live Status</h2>
@@ -1027,231 +1099,8 @@ function FounderDashboard({
         </div>
       </section>
 
-      {/* Booked Appointments & Consultations Section for Founder */}
-      <section className="panel" style={{ padding: "20px 24px", marginBottom: "20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "10px",
-                background: "color-mix(in oklab, var(--primary) 14%, transparent)",
-                color: "var(--primary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <CalendarClock size={22} />
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Booked Appointments & Consultations</h2>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    padding: "2px 8px",
-                    borderRadius: "12px",
-                    background: "color-mix(in oklab, var(--primary) 12%, transparent)",
-                    color: "var(--primary)",
-                  }}
-                >
-                  Live Calendar Preview
-                </span>
-              </div>
-              <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "4px 0 0" }}>
-                Active bookings and scheduled client consultations from <strong>calendar.buildicy.com</strong>. Click any card to manage.
-              </p>
-            </div>
-          </div>
-          <a
-            href="https://calendar.buildicy.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
-            style={{ textDecoration: "none" }}
-          >
-            <span>Open Calendar Dashboard</span>
-            <ArrowRight size={13} />
-          </a>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "14px",
-          }}
-        >
-          {[
-            {
-              id: "apt-1",
-              prospect: "David Sterling",
-              company: "Apex Global Logistics",
-              host: "Ganesh",
-              hostRole: "Marketing Lead",
-              time: "Today · 3:30 PM (30 min)",
-              topic: "Full-Stack Web Architecture & Custom Platform Scope",
-              status: "Confirmed",
-            },
-            {
-              id: "apt-2",
-              prospect: "Elena Rostova",
-              company: "Nordic FinTech Ventures",
-              host: "Dhruv",
-              hostRole: "Growth Marketing",
-              time: "Tomorrow · 11:00 AM (45 min)",
-              topic: "MVP Acceleration & AI Integration Consultation",
-              status: "Confirmed",
-            },
-            {
-              id: "apt-3",
-              prospect: "Rahul Sharma",
-              company: "Kavach Cybersecurity",
-              host: "Padma",
-              hostRole: "Content & Inbound",
-              time: "Friday · 2:00 PM (30 min)",
-              topic: "Client Discovery & Enterprise Retainer Discussion",
-              status: "Confirmed",
-            },
-          ].map((item) => (
-            <div
-              key={item.id}
-              onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
-              style={{
-                padding: "16px",
-                borderRadius: "14px",
-                border: "1px solid var(--border)",
-                background: "var(--card)",
-                cursor: "pointer",
-                transition: "all 0.18s ease",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--primary)";
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 8px 24px color-mix(in oklab, var(--primary) 16%, transparent)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--border)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-              title="Click to view booking on calendar.buildicy.com"
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <strong style={{ fontSize: "13.5px", color: "var(--foreground)" }}>{item.prospect}</strong>
-                  <span style={{ fontSize: "11.5px", color: "var(--muted-foreground)", display: "block" }}>{item.company}</span>
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    padding: "3px 8px",
-                    borderRadius: "10px",
-                    background: "oklch(0.93 0.08 145)",
-                    color: "oklch(0.35 0.18 145)",
-                  }}
-                >
-                  {item.status}
-                </span>
-              </div>
-              <p style={{ fontSize: "11.5px", color: "var(--muted-foreground)", margin: "2px 0", lineHeight: 1.4 }}>
-                {item.topic}
-              </p>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "var(--foreground)", fontWeight: 500 }}>
-                <Clock size={13} style={{ color: "var(--primary)" }} />
-                <span>{item.time}</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  borderTop: "1px solid var(--border)",
-                  paddingTop: "10px",
-                  marginTop: "4px",
-                }}
-              >
-                <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
-                  Host: <strong style={{ color: "var(--foreground)" }}>{item.host}</strong> ({item.hostRole})
-                </span>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: "3px" }}>
-                  View on Calendar ↗
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
+      {/* 3. Recent Activity & Follow-ups Due Row */}
       <div className="dashboard-grid">
-        <section className="panel chart-panel">
-          <SectionHeading
-            title="Lead activity"
-            detail="Touchpoints logged by the team across the week"
-            action={<Segmented value={range} setValue={setRange} />}
-          />
-          <div className="bar-chart">
-            {weekDays.map((dayName, i) => {
-              const count = weekCounts[i] ?? 0;
-              const heightPct = count > 0 ? Math.max(16, Math.round((count / maxActivity) * 100)) : 8;
-              const isToday = i === currentDayIdx;
-              const isPeak = count === maxActivity && count > 0;
-              return (
-                <div key={dayName} className="bar-column">
-                  <span
-                    className={isToday || isPeak ? "bar active" : "bar"}
-                    style={{ height: `${heightPct}%` }}
-                    title={`${dayName}: ${count} touchpoints`}
-                  >
-                    {(isToday || isPeak) && (
-                      <em>
-                        {count} {count === 1 ? "action" : "actions"}
-                      </em>
-                    )}
-                  </span>
-                  <small>{dayName}</small>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-        <section className="panel">
-          <SectionHeading title="Team leaderboard" detail="Active team members & win distribution" />
-          <div className="leaderboard">
-            {users
-              .filter((u) => u.role !== "founder")
-              .map((m, i) => {
-                const memberLeads = leads.filter((l) => l.ownerId === m.id || l.ownerName === m.name);
-              const memberWon = memberLeads.filter((l) => l.status === "Won").length;
-              const winPct = memberLeads.length > 0 ? Math.round((memberWon / memberLeads.length) * 100) : 0;
-              const totalVal = memberLeads.reduce((s, l) => s + (Number(l.value) || 0), 0);
-              const progressPct = leads.length > 0 ? Math.round((memberLeads.length / leads.length) * 100) : 0;
-              return (
-                <div key={m.email}>
-                  <span className="rank">{i + 1}</span>
-                  <Avatar initials={m.initials} color={m.color} size="sm" />
-                  <p>
-                    <strong>{m.name}</strong>
-                    <small>
-                      {memberLeads.length} leads · {formatMoney(totalVal)} · {winPct}% win
-                    </small>
-                  </p>
-                  <span className="progress">
-                    <i style={{ width: `${Math.max(6, progressPct)}%` }} />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
         <section className="panel">
           <SectionHeading
             title="Recent activity"
@@ -1263,6 +1112,7 @@ function FounderDashboard({
           />
           <ActivityList activities={activities.slice(0, 5)} />
         </section>
+
         <section className="panel">
           <SectionHeading title="Follow-ups due" detail="Conversations needing attention" />
           <div className="followup-list">
@@ -1286,6 +1136,110 @@ function FounderDashboard({
           </div>
         </section>
       </div>
+
+      {/* Minimalist Booked Appointments Modal (Clean, direct & zero clumsy nested panels) */}
+      <Dialog open={appointmentsModalOpen} onOpenChange={setAppointmentsModalOpen}>
+        <DialogContent className="hub-dialog sm:max-w-[540px]" style={{ padding: "24px" }}>
+          <DialogHeader>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "12px",
+                  background: "#0f0f11",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <CalendarClock size={20} />
+              </div>
+              <div>
+                <DialogTitle style={{ fontSize: "17px", fontWeight: 700 }}>
+                  Booked Appointments ({realMeetings.length})
+                </DialogTitle>
+                <DialogDescription style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>
+                  Live sync with <strong>calendar.buildicy.com</strong>
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div style={{ maxHeight: "340px", overflowY: "auto", margin: "12px 0", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {realMeetings.length > 0 ? (
+              realMeetings.map((m) => {
+                const matchedLead = leads.find((l) => l.id === m.leadId);
+                const displayName = matchedLead?.name || "Client Consultation";
+                const displayCompany = matchedLead?.company || "calendar.buildicy.com";
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: "13.5px", display: "block" }}>{displayName}</strong>
+                      <span style={{ fontSize: "11.5px", color: "var(--muted-foreground)" }}>
+                        {displayCompany} · Host: <strong>{m.userName}</strong>
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "#0f0f11", marginTop: "4px", fontWeight: 500 }}>
+                        <Clock size={12} />
+                        <span>{new Date(m.createdAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "11.5px", color: "#0f0f11", fontWeight: 600 }}>Open ↗</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--muted-foreground)" }}>
+                <CalendarClock size={36} style={{ margin: "0 auto 10px", opacity: 0.35 }} />
+                <p style={{ fontSize: "14px", fontWeight: 600, margin: "0 0 4px", color: "var(--foreground)" }}>
+                  0 Appointments Booked
+                </p>
+                <small style={{ fontSize: "12px" }}>
+                  All prospect discovery calls and meetings booked on calendar.buildicy.com sync here live.
+                </small>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
+            <Button
+              variant="outline"
+              size="sm"
+              style={{ borderRadius: "999px", fontSize: "12px", height: "36px", padding: "0 14px" }}
+              onClick={() => {
+                navigator.clipboard.writeText("https://calendar.buildicy.com/");
+                toast.success("Calendar link copied: https://calendar.buildicy.com/");
+              }}
+            >
+              <Copy size={13} style={{ marginRight: "6px" }} />
+              Copy Booking Link
+            </Button>
+            <Button
+              className="primary-pill"
+              style={{ height: "36px" }}
+              onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
+            >
+              Open calendar.buildicy.com ↗
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <MemberProfileModal
         user={inspectedMember}
@@ -1725,7 +1679,7 @@ function LeadsView({
                     aria-label="Select all leads"
                     checked={isAllSelected}
                     onChange={handleToggleAll}
-                    style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "oklch(0.53 0.23 292)" }}
+                    style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "#0f0f11" }}
                   />
                 </th>
                 <th>Lead</th>
@@ -1748,7 +1702,7 @@ function LeadsView({
                   <tr
                     key={l.id}
                     onClick={() => openLead(l.id)}
-                    style={{ background: isSelected ? "oklch(0.53 0.23 292 / 0.05)" : undefined, cursor: "pointer" }}
+                    style={{ background: isSelected ? "rgba(15, 15, 17, 0.05)" : undefined, cursor: "pointer" }}
                   >
                     <td style={{ textAlign: "center", padding: "0 8px" }} onClick={(e) => e.stopPropagation()}>
                       <input
@@ -1756,7 +1710,7 @@ function LeadsView({
                         aria-label={`Select lead ${l.name}`}
                         checked={isSelected}
                         onChange={(e) => handleToggleOne(l.id, e as any)}
-                        style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "oklch(0.53 0.23 292)" }}
+                        style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "#0f0f11" }}
                       />
                     </td>
                     <td>
@@ -1785,7 +1739,7 @@ function LeadsView({
                             width: "7px",
                             height: "7px",
                             borderRadius: "50%",
-                            background: l.ownerId === currentUser.id ? "oklch(0.53 0.23 292)" : "oklch(0.6 0.1 200)",
+                            background: l.ownerId === currentUser.id ? "#0f0f11" : "#71717a",
                           }}
                         />
                         {l.ownerName}

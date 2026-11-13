@@ -76,6 +76,16 @@ export const CREDENTIALS: Record<
     workingStatus: "Follow-ups",
     avatarUrl: "/avatars/3d-avatar-2.jpg",
   },
+  "rizwan@buildicy.com": {
+    pass: "RizwanBuildicy@2026",
+    role: "member",
+    name: "Rizwan",
+    initials: "RZ",
+    color: "avatar-sky",
+    title: "Marketing Specialist",
+    workingStatus: "Outreach",
+    avatarUrl: "/avatars/3d-avatar-4.jpg",
+  },
 };
 
 export const getStoredCredentials = (): Record<
@@ -154,6 +164,21 @@ export const INITIAL_USERS: UserProfile[] = [
     workingStatus: "Follow-ups",
     statusUpdatedAt: new Date().toISOString(),
     avatarUrl: "/avatars/3d-avatar-2.jpg",
+    avatarChosen: false,
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000005",
+    email: "rizwan@buildicy.com",
+    name: "Rizwan",
+    role: "member",
+    title: "Marketing Specialist",
+    department: "Marketing",
+    initials: "RZ",
+    color: "avatar-sky",
+    activeStatus: "Active now",
+    workingStatus: "Outreach",
+    statusUpdatedAt: new Date().toISOString(),
+    avatarUrl: "/avatars/3d-avatar-4.jpg",
     avatarChosen: false,
   },
 ];
@@ -256,6 +281,14 @@ export const HubStore = {
       user = { ...user, name: "Heyy Founder", initials: "HF", avatarUrl: "", avatarChosen: true };
       CookieAuth.set("buildicy_session_user", JSON.stringify(user));
       setStored("buildicy_auth_user", user);
+    } else if (user && user.email) {
+      const emailLower = user.email.toLowerCase();
+      if (typeof window !== "undefined") {
+        const savedAvatar = localStorage.getItem(`buildicy_user_avatar_${emailLower}`);
+        if (savedAvatar) {
+          user = { ...user, avatarUrl: savedAvatar, avatarChosen: true };
+        }
+      }
     }
     return user;
   },
@@ -272,20 +305,42 @@ export const HubStore = {
 
   updateUserAvatar: (userId: string, avatarUrl: string) => {
     const users = HubStore.getUsers();
+    const targetUser = users.find((u) => u.id === userId);
+    const email = (targetUser?.email || "").toLowerCase();
+
+    if (typeof window !== "undefined" && email) {
+      localStorage.setItem(`buildicy_user_avatar_${email}`, avatarUrl);
+      localStorage.setItem(`buildicy_avatar_saved_${email}`, "true");
+    }
+
     const updated = users.map((u) =>
-      u.id === userId ? { ...u, avatarUrl, avatarChosen: true } : u,
+      u.id === userId || (email && u.email.toLowerCase() === email)
+        ? { ...u, avatarUrl, avatarChosen: true }
+        : u,
     );
     setStored("buildicy_users", updated);
 
-    const cur = HubStore.getCurrentUser();
-    if (cur && cur.id === userId) {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`buildicy_avatar_saved_${cur.email.toLowerCase()}`, "true");
+    // Also persist into custom credentials
+    if (email) {
+      const custom = getStored<Record<string, any>>("buildicy_custom_credentials", {});
+      if (custom[email]) {
+        custom[email].avatarUrl = avatarUrl;
+        setStored("buildicy_custom_credentials", custom);
       }
+    }
+
+    const cur = HubStore.getCurrentUser();
+    if (cur && (cur.id === userId || (email && cur.email.toLowerCase() === email))) {
       HubStore.setCurrentUser({ ...cur, avatarUrl, avatarChosen: true });
     }
 
-    supabase.update("profiles", `id=eq.${userId}`, { avatar_url: avatarUrl });
+    try {
+      supabase.update("profiles", `id=eq.${userId}`, { avatar_url: avatarUrl });
+    } catch {}
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("buildicy_storage_update"));
+    }
   },
 
   updateUserRole: (
@@ -982,15 +1037,58 @@ export const HubStore = {
   },
 
   getUsers: (): UserProfile[] => {
-    const list = getStored<UserProfile[]>("buildicy_users", INITIAL_USERS);
+    let list = getStored<UserProfile[]>("buildicy_users", INITIAL_USERS);
+    if (!Array.isArray(list) || list.length === 0) {
+      list = [...INITIAL_USERS];
+    }
+    // Ensure all INITIAL_USERS exist in list (especially Rizwan)
+    INITIAL_USERS.forEach((initU) => {
+      if (!list.some((u) => u.email.toLowerCase() === initU.email.toLowerCase())) {
+        list.push(initU);
+      }
+    });
+
+    // Ensure any custom-created member in buildicy_custom_credentials exists
+    const customCreds = getStored<Record<string, any>>("buildicy_custom_credentials", {});
+    Object.entries(customCreds).forEach(([email, cred]) => {
+      const cleanEmail = email.toLowerCase();
+      if (!list.some((u) => u.email.toLowerCase() === cleanEmail)) {
+        list.push({
+          id: cred.id || `custom-${cleanEmail.replace(/[^a-z0-9]/g, "-")}`,
+          email: cleanEmail,
+          name: cred.name || "Team Member",
+          role: cred.role || "member",
+          title: cred.title || "Marketing Specialist",
+          department: cred.department || "Marketing",
+          initials: cred.initials || "TM",
+          color: cred.color || "avatar-sky",
+          activeStatus: "Active now",
+          workingStatus: cred.workingStatus || "Outreach",
+          statusUpdatedAt: new Date().toISOString(),
+          avatarUrl: cred.avatarUrl || "/avatars/3d-avatar-4.jpg",
+          avatarChosen: true,
+        });
+      }
+    });
+
     const defaultAvatars: Record<string, string> = {
       "founder@buildicy.com": "",
       "ganesh.marketing@buildicy.com": "/avatars/3d-avatar-1.jpg",
       "dhruv.marketing@buildicy.com": "/avatars/3d-avatar-3.jpg",
       "padma.amarketing@buildicy.com": "/avatars/3d-avatar-2.jpg",
+      "rizwan@buildicy.com": "/avatars/3d-avatar-4.jpg",
     };
     return list.map((u) => {
       let updated = { ...u };
+      const emailLower = (updated.email || "").toLowerCase();
+      if (typeof window !== "undefined" && emailLower) {
+        const savedAvatar = localStorage.getItem(`buildicy_user_avatar_${emailLower}`);
+        if (savedAvatar) {
+          updated.avatarUrl = savedAvatar;
+          updated.avatarChosen = true;
+          return updated;
+        }
+      }
       if (updated.email === "founder@buildicy.com") {
         updated.name = "Heyy Founder";
         updated.initials = "HF";
@@ -999,7 +1097,7 @@ export const HubStore = {
       } else {
         // Automatically upgrade any legacy SVG avatar or empty avatar to real 3D Pixar avatar
         if (!updated.avatarUrl || updated.avatarUrl.includes(".svg")) {
-          updated.avatarUrl = defaultAvatars[updated.email] || "/avatars/3d-avatar-1.jpg";
+          updated.avatarUrl = defaultAvatars[updated.email] || "/avatars/3d-avatar-4.jpg";
         }
       }
       return updated;
