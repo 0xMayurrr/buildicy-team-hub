@@ -288,6 +288,51 @@ export const HubStore = {
     supabase.update("profiles", `id=eq.${userId}`, { avatar_url: avatarUrl });
   },
 
+  updateUserRole: (
+    userId: string,
+    updates: {
+      role?: UserRole;
+      title?: string;
+      department?: string;
+      name?: string;
+    },
+  ) => {
+    const users = HubStore.getUsers();
+    const updated = users.map((u) => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          ...(updates.role ? { role: updates.role } : {}),
+          ...(updates.title ? { title: updates.title } : {}),
+          ...(updates.department ? { department: updates.department } : {}),
+          ...(updates.name ? { name: updates.name } : {}),
+        };
+      }
+      return u;
+    });
+    setStored("buildicy_users", updated);
+
+    const cur = HubStore.getCurrentUser();
+    if (cur && cur.id === userId) {
+      HubStore.setCurrentUser({
+        ...cur,
+        ...(updates.role ? { role: updates.role } : {}),
+        ...(updates.title ? { title: updates.title } : {}),
+        ...(updates.department ? { department: updates.department } : {}),
+        ...(updates.name ? { name: updates.name } : {}),
+      });
+    }
+
+    try {
+      supabase.update("profiles", `id=eq.${userId}`, {
+        ...(updates.role ? { role: updates.role } : {}),
+        ...(updates.title ? { title: updates.title } : {}),
+        ...(updates.department ? { department: updates.department } : {}),
+        ...(updates.name ? { full_name: updates.name } : {}),
+      });
+    } catch {}
+  },
+
   login: async (email: string, pass: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
     const rawEmail = email.trim().toLowerCase();
     // Allow either full email (rizwan@buildicy.com) or username (rizwan)
@@ -1176,6 +1221,35 @@ export const HubStore = {
       time: "Just now",
       userId: newOwner.id,
     });
+  },
+
+  reassignAllUserLeads: (fromUserId: string, newOwner: UserProfile): number => {
+    const leads = HubStore.getLeads();
+    let count = 0;
+    const updated = leads.map((l) => {
+      if (l.ownerId === fromUserId) {
+        count++;
+        return {
+          ...l,
+          ownerId: newOwner.id,
+          ownerName: newOwner.name,
+          updated: "Just now",
+        };
+      }
+      return l;
+    });
+    setStored("buildicy_leads", updated);
+
+    // Update remote supabase leads
+    try {
+      supabase.update("leads", `assigned_to=eq.${fromUserId}`, {
+        assigned_to: newOwner.id.startsWith("usr-") ? null : newOwner.id,
+        owner_name: newOwner.name,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {}
+
+    return count;
   },
 
   deleteLead: (leadId: string): boolean => {

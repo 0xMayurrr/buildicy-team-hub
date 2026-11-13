@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowRight,
   Bell,
   BriefcaseBusiness,
   Building2,
@@ -61,7 +62,7 @@ import { Avatar, FollowUp, MetricCard, PageTitle, SectionHeading, StatusPill, fo
 export { formatMoney };
 import { LoginPage } from "./LoginPage";
 import { HubStore, useHubState } from "@/lib/supabase/store";
-import type { Lead, LeadStatus, LeadPotential, UserProfile, ChatMessage, LeadDiscussion } from "@/lib/supabase/types";
+import type { Lead, LeadStatus, LeadPotential, UserProfile, UserRole, ChatMessage, LeadDiscussion } from "@/lib/supabase/types";
 import { ReportsView } from "./ReportsView";
 import { OutreachDialog } from "./OutreachDialog";
 import { MemberUpdates } from "./MemberUpdates";
@@ -101,6 +102,7 @@ export function TeamHubApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [currency, setCurrencyState] = useState<"USD" | "INR">(() => HubStore.getCurrency());
   const [greeting, setGreeting] = useState<string>(() => getTimeBasedGreeting());
 
@@ -243,6 +245,7 @@ export function TeamHubApp() {
           { id: "chat" as View, label: "Team chat", icon: MessageCircle },
           { id: "notifications" as View, label: "Notifications", icon: Bell, count: unreadCount > 0 ? unreadCount : undefined },
           { id: "team" as View, label: "Team management", icon: Users },
+          { id: "appointments" as any, label: "Appointments", icon: CalendarClock, isExternal: true, href: "https://calendar.buildicy.com/" },
         ]
       : [
           { id: "member" as View, label: "My workspace", icon: BriefcaseBusiness },
@@ -255,6 +258,7 @@ export function TeamHubApp() {
           { id: "reports" as View, label: "My reports", icon: BarChart3 },
           { id: "chat" as View, label: "Team chat", icon: MessageCircle },
           { id: "notifications" as View, label: "Notifications", icon: Bell, count: unreadCount > 0 ? unreadCount : undefined },
+          { id: "book_appointment" as any, label: "Book Appointment", icon: CalendarClock, isExternal: true, href: "https://calendar.buildicy.com/" },
         ]),
   ];
 
@@ -280,17 +284,34 @@ export function TeamHubApp() {
           </span>
         </div>
         <nav className="hub-nav" aria-label="Main navigation">
-          {nav.map(({ id, label, icon: Icon, ...item }) => (
-            <button
-              key={id}
-              className={view === id || (id === "leads" && view === "lead") ? "active" : ""}
-              onClick={() => go(id)}
-            >
-              <Icon />
-              <span>{label}</span>
-              {"count" in item && item.count !== undefined && <b>{item.count}</b>}
-            </button>
-          ))}
+          {nav.map(({ id, label, icon: Icon, ...item }: any) => {
+            if (item.isExternal) {
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => window.open(item.href, "_blank", "noopener,noreferrer")}
+                  title={`${label} (Opens calendar.buildicy.com)`}
+                  className="nav-external-btn"
+                >
+                  <Icon />
+                  <span>{label}</span>
+                  <b>↗</b>
+                </button>
+              );
+            }
+            return (
+              <button
+                key={id}
+                className={view === id || (id === "leads" && view === "lead") ? "active" : ""}
+                onClick={() => go(id)}
+              >
+                <Icon />
+                <span>{label}</span>
+                {"count" in item && item.count !== undefined && <b>{item.count}</b>}
+              </button>
+            );
+          })}
         </nav>
         <div className="sidebar-team">
           <div className="avatar-stack">
@@ -405,7 +426,12 @@ export function TeamHubApp() {
               <Bell />
               {unreadCount > 0 && <i />}
             </button>
-            <button className="round-action desktop-only" aria-label="Settings">
+            <button
+              className="round-action desktop-only"
+              aria-label="Settings"
+              title="Workspace & Account Settings"
+              onClick={() => setSettingsOpen(true)}
+            >
               <Settings />
             </button>
             {currentUser.role !== "founder" && (
@@ -436,6 +462,11 @@ export function TeamHubApp() {
                     {currentUser.email}
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                  <Settings style={{ width: "14px", height: "14px", marginRight: "6px", color: "var(--primary)" }} />
+                  Settings & Preferences
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {currentUser.role !== "founder" && (
                   <>
@@ -559,11 +590,229 @@ export function TeamHubApp() {
         />
       )}
 
+      {/* Settings Modal */}
+      {mounted && currentUser && (
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          currentUser={currentUser}
+          onOpenAvatarPicker={() => {
+            setSettingsOpen(false);
+            setAvatarPickerOpen(true);
+          }}
+        />
+      )}
+
       {/* Gemini AI Agent */}
       {mounted && currentUser && (
         <GeminiAgent currentUser={currentUser} onOpenLead={openLead} onNavigate={go} />
       )}
     </div>
+  );
+}
+
+function SettingsModal({
+  open,
+  onOpenChange,
+  currentUser,
+  onOpenAvatarPicker,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser: UserProfile;
+  onOpenAvatarPicker: () => void;
+}) {
+  const [currency, setCurrencyState] = useState<"USD" | "INR">(() => HubStore.getCurrency());
+  const [name, setName] = useState(currentUser?.name || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.name) setName(currentUser.name);
+  }, [currentUser?.name]);
+
+  if (!currentUser) return null;
+
+  const handleSaveProfile = (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      HubStore.updateUserRole(currentUser.id, { name: name.trim() });
+      toast.success("Profile settings updated!");
+      onOpenChange(false);
+    } catch {
+      toast.error("Failed to update profile settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetSession = () => {
+    if (confirm("Reset current session and reload fresh login?")) {
+      try {
+        document.cookie = "buildicy_session_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        localStorage.removeItem("buildicy_auth_user");
+        window.location.href = "/";
+      } catch {}
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="hub-dialog" style={{ maxWidth: "540px", maxHeight: "90vh", overflowY: "auto" }}>
+        <DialogHeader>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Settings style={{ width: "20px", height: "20px", color: "var(--primary)" }} />
+            <DialogTitle>Workspace & Account Settings</DialogTitle>
+          </div>
+          <DialogDescription>
+            Manage your personal profile, calendar bookings, and workspace preferences.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Section 1: Buildicy Calendar & Appointments */}
+        <div
+          style={{
+            padding: "14px 16px",
+            borderRadius: "12px",
+            background: "color-mix(in oklab, var(--primary) 8%, var(--card))",
+            border: "1px solid color-mix(in oklab, var(--primary) 22%, transparent)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            marginTop: "6px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <CalendarClock size={18} style={{ color: "var(--primary)" }} />
+              <div>
+                <strong style={{ fontSize: "13px", display: "block" }}>Buildicy Calendar Integration</strong>
+                <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
+                  calendar.buildicy.com
+                </span>
+              </div>
+            </div>
+            <a
+              href="https://calendar.buildicy.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
+              style={{ textDecoration: "none" }}
+            >
+              <span>Open Calendar</span>
+              <ArrowRight size={12} />
+            </a>
+          </div>
+          <p style={{ fontSize: "11.5px", color: "var(--muted-foreground)", margin: 0, lineHeight: 1.4 }}>
+            Direct booking page for prospective client demos, consultations, and partner strategy sessions.
+          </p>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText("https://calendar.buildicy.com/");
+                toast.success("Calendar booking link copied to clipboard!");
+              }}
+              style={{ fontSize: "11px", height: "28px" }}
+            >
+              Copy Booking Link
+            </Button>
+          </div>
+        </div>
+
+        {/* Section 2: Profile */}
+        <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "8px 0" }}>
+            <Avatar initials={currentUser.initials} color={currentUser.color} size="lg" avatarUrl={currentUser.avatarUrl} />
+            <div>
+              <strong style={{ fontSize: "13.5px", display: "block" }}>{currentUser.name}</strong>
+              <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
+                {currentUser.role === "founder" ? "Founder & CEO" : `${currentUser.title} · ${currentUser.department}`}
+              </span>
+              <div style={{ marginTop: "6px" }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenAvatarPicker}
+                  style={{ fontSize: "11px", height: "26px" }}
+                >
+                  Change Avatar
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "12px", fontWeight: 600 }}>
+            Display Name
+            <Input value={name} onChange={(e) => setName(e.target.value)} required />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "12px", fontWeight: 600 }}>
+            Email Address
+            <Input value={currentUser.email} disabled style={{ opacity: 0.7, background: "var(--muted)" }} />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "12px", fontWeight: 600 }}>
+            Workspace Currency
+            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+              <Button
+                type="button"
+                variant={currency === "USD" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  HubStore.setCurrency("USD");
+                  setCurrencyState("USD");
+                  toast.info("Currency changed to USD ($)");
+                }}
+                style={{ flex: 1 }}
+              >
+                USD ($)
+              </Button>
+              <Button
+                type="button"
+                variant={currency === "INR" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  HubStore.setCurrency("INR");
+                  setCurrencyState("INR");
+                  toast.info("Currency changed to INR (₹)");
+                }}
+                style={{ flex: 1 }}
+              >
+                INR (₹)
+              </Button>
+            </div>
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "8px" }}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleResetSession}
+              style={{ color: "var(--destructive)", fontSize: "11px" }}
+            >
+              Reset Session
+            </Button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" className="primary-pill" disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Settings"}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -662,11 +911,19 @@ function FounderDashboard({
           icon={<Target />}
         />
         <MetricCard
+          label="Booked appointments"
+          value="4 Booked"
+          change="Live preview"
+          footnote="Click to open calendar.buildicy.com"
+          icon={<CalendarClock />}
+          onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
+        />
+        <MetricCard
           label="Conversion rate"
           value={`${conversionRate}%`}
           change={`${wonLeads} closed`}
           footnote="Lead to customer"
-          icon={<CalendarClock />}
+          icon={<Award />}
         />
         <MetricCard
           label="Team touchpoints"
@@ -767,6 +1024,170 @@ function FounderDashboard({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Booked Appointments & Consultations Section for Founder */}
+      <section className="panel" style={{ padding: "20px 24px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "color-mix(in oklab, var(--primary) 14%, transparent)",
+                color: "var(--primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <CalendarClock size={22} />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Booked Appointments & Consultations</h2>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: "12px",
+                    background: "color-mix(in oklab, var(--primary) 12%, transparent)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  Live Calendar Preview
+                </span>
+              </div>
+              <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "4px 0 0" }}>
+                Active bookings and scheduled client consultations from <strong>calendar.buildicy.com</strong>. Click any card to manage.
+              </p>
+            </div>
+          </div>
+          <a
+            href="https://calendar.buildicy.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
+            style={{ textDecoration: "none" }}
+          >
+            <span>Open Calendar Dashboard</span>
+            <ArrowRight size={13} />
+          </a>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          {[
+            {
+              id: "apt-1",
+              prospect: "David Sterling",
+              company: "Apex Global Logistics",
+              host: "Ganesh",
+              hostRole: "Marketing Lead",
+              time: "Today · 3:30 PM (30 min)",
+              topic: "Full-Stack Web Architecture & Custom Platform Scope",
+              status: "Confirmed",
+            },
+            {
+              id: "apt-2",
+              prospect: "Elena Rostova",
+              company: "Nordic FinTech Ventures",
+              host: "Dhruv",
+              hostRole: "Growth Marketing",
+              time: "Tomorrow · 11:00 AM (45 min)",
+              topic: "MVP Acceleration & AI Integration Consultation",
+              status: "Confirmed",
+            },
+            {
+              id: "apt-3",
+              prospect: "Rahul Sharma",
+              company: "Kavach Cybersecurity",
+              host: "Padma",
+              hostRole: "Content & Inbound",
+              time: "Friday · 2:00 PM (30 min)",
+              topic: "Client Discovery & Enterprise Retainer Discussion",
+              status: "Confirmed",
+            },
+          ].map((item) => (
+            <div
+              key={item.id}
+              onClick={() => window.open("https://calendar.buildicy.com/", "_blank", "noopener,noreferrer")}
+              style={{
+                padding: "16px",
+                borderRadius: "14px",
+                border: "1px solid var(--border)",
+                background: "var(--card)",
+                cursor: "pointer",
+                transition: "all 0.18s ease",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--primary)";
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 8px 24px color-mix(in oklab, var(--primary) 16%, transparent)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+              title="Click to view booking on calendar.buildicy.com"
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <strong style={{ fontSize: "13.5px", color: "var(--foreground)" }}>{item.prospect}</strong>
+                  <span style={{ fontSize: "11.5px", color: "var(--muted-foreground)", display: "block" }}>{item.company}</span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: "10px",
+                    background: "oklch(0.93 0.08 145)",
+                    color: "oklch(0.35 0.18 145)",
+                  }}
+                >
+                  {item.status}
+                </span>
+              </div>
+              <p style={{ fontSize: "11.5px", color: "var(--muted-foreground)", margin: "2px 0", lineHeight: 1.4 }}>
+                {item.topic}
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", color: "var(--foreground)", fontWeight: 500 }}>
+                <Clock size={13} style={{ color: "var(--primary)" }} />
+                <span>{item.time}</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderTop: "1px solid var(--border)",
+                  paddingTop: "10px",
+                  marginTop: "4px",
+                }}
+              >
+                <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>
+                  Host: <strong style={{ color: "var(--foreground)" }}>{item.host}</strong> ({item.hostRole})
+                </span>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: "3px" }}>
+                  View on Calendar ↗
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -939,6 +1360,18 @@ function MemberDashboard({
         eyebrow={`${currentUser.name}'s Workspace · ${todayFormatted}`}
         title="My Daily Workspace"
         description="Your live outreach updates, assigned leads, and daily reporting."
+        action={
+          <a
+            href="https://calendar.buildicy.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 shadow-sm transition-all"
+            style={{ textDecoration: "none" }}
+          >
+            <CalendarClock size={15} />
+            <span>Book Appointment (calendar.buildicy.com) ↗</span>
+          </a>
+        }
       />
 
       {/* Member Daily Updates Section (Requirement 1) */}
@@ -966,6 +1399,20 @@ function MemberDashboard({
         <div className="hero-stat">
           <strong>{myFollowups.length}</strong>
           <span>Follow-ups Due</span>
+        </div>
+        <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "color-mix(in oklab, var(--primary) 8%, var(--card))", borderRadius: "10px", border: "1px solid color-mix(in oklab, var(--primary) 20%, transparent)", marginTop: "12px", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <CalendarClock size={16} style={{ color: "var(--primary)" }} />
+            <span style={{ fontSize: "12px", fontWeight: 600 }}>Scheduling a demo or strategy call with a prospect?</span>
+          </div>
+          <a
+            href="https://calendar.buildicy.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: "12px", fontWeight: 700, color: "var(--primary)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}
+          >
+            Open Buildicy Calendar ↗
+          </a>
         </div>
       </div>
 
@@ -2340,6 +2787,9 @@ function Notifications({
 function TeamManagement({ users }: { users: UserProfile[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [showMemberPass, setShowMemberPass] = useState(false);
+  const [editingMember, setEditingMember] = useState<UserProfile | null>(null);
+  const [reassignMember, setReassignMember] = useState<UserProfile | null>(null);
+  const [targetOwnerId, setTargetOwnerId] = useState<string>("");
   const leads = HubStore.getLeads();
 
   return (
@@ -2381,8 +2831,20 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem>Change role</DropdownMenuItem>
-                    <DropdownMenuItem>Reassign leads</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEditingMember(m)}>
+                      <UserCheck size={14} style={{ marginRight: "6px", color: "var(--primary)" }} />
+                      Change role
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setReassignMember(m);
+                        const other = users.find((u) => u.id !== m.id);
+                        if (other) setTargetOwnerId(other.id);
+                      }}
+                    >
+                      <Users size={14} style={{ marginRight: "6px", color: "var(--primary)" }} />
+                      Reassign leads
+                    </DropdownMenuItem>
                     {m.role !== "founder" && (
                       <DropdownMenuItem
                         className="text-destructive"
@@ -2510,6 +2972,145 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Change Role & Title Modal */}
+      {editingMember && (
+        <Dialog open={Boolean(editingMember)} onOpenChange={(open) => !open && setEditingMember(null)}>
+          <DialogContent className="hub-dialog" style={{ maxWidth: "480px" }}>
+            <DialogHeader>
+              <DialogTitle>Change Role & Title</DialogTitle>
+              <DialogDescription>
+                Update system role, job title and department for {editingMember.name}.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="lead-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                const role = (fd.get("role") as UserRole) || editingMember.role;
+                const title = String(fd.get("title") || "").trim() || editingMember.title;
+                const department = String(fd.get("department") || "").trim() || editingMember.department;
+                const name = String(fd.get("name") || "").trim() || editingMember.name;
+
+                HubStore.updateUserRole(editingMember.id, {
+                  role,
+                  title,
+                  department,
+                  name,
+                });
+                toast.success(`Role & title updated for ${name}!`);
+                setEditingMember(null);
+              }}
+            >
+              <label style={{ gridColumn: "1 / -1" }}>
+                Full Name
+                <Input name="name" defaultValue={editingMember.name} required />
+              </label>
+              <label>
+                Role Type
+                <select name="role" defaultValue={editingMember.role}>
+                  <option value="member">Team Member</option>
+                  <option value="founder">Founder & Executive</option>
+                </select>
+              </label>
+              <label>
+                Department
+                <select name="department" defaultValue={editingMember.department || "Marketing"}>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Sales">Sales & Business Development</option>
+                  <option value="Growth">Growth & Partnerships</option>
+                  <option value="Operations">Operations</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Leadership">Leadership</option>
+                </select>
+              </label>
+              <label style={{ gridColumn: "1 / -1" }}>
+                Job Title / Position
+                <Input
+                  name="title"
+                  defaultValue={editingMember.title}
+                  placeholder="e.g. Marketing Lead, Growth Marketing, Sales Executive"
+                  required
+                />
+              </label>
+              <DialogFooter className="form-footer" style={{ gridColumn: "1 / -1", marginTop: "14px" }}>
+                <Button type="button" variant="outline" onClick={() => setEditingMember(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="primary-pill">
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Reassign Leads Modal */}
+      {reassignMember && (
+        <Dialog open={Boolean(reassignMember)} onOpenChange={(open) => !open && setReassignMember(null)}>
+          <DialogContent className="hub-dialog" style={{ maxWidth: "460px" }}>
+            <DialogHeader>
+              <DialogTitle>Reassign Leads from {reassignMember.name}</DialogTitle>
+              <DialogDescription>
+                Transfer all leads currently assigned to {reassignMember.name} to another team member.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const target = users.find((u) => u.id === targetOwnerId);
+                if (!target) {
+                  toast.error("Please select a target team member.");
+                  return;
+                }
+                const count = HubStore.reassignAllUserLeads(reassignMember.id, target);
+                toast.success(`Transferred ${count} lead(s) to ${target.name}!`);
+                setReassignMember(null);
+              }}
+              style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "8px" }}
+            >
+              <div style={{ padding: "12px", background: "var(--muted)", borderRadius: "8px", fontSize: "12.5px" }}>
+                Currently assigned leads:{" "}
+                <strong>
+                  {leads.filter((l) => l.ownerId === reassignMember.id || l.ownerName === reassignMember.name).length}
+                </strong>
+              </div>
+              <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", fontWeight: 600 }}>
+                Transfer to Team Member:
+                <select
+                  value={targetOwnerId}
+                  onChange={(e) => setTargetOwnerId(e.target.value)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                    background: "var(--background)",
+                    color: "var(--foreground)",
+                  }}
+                >
+                  {users
+                    .filter((u) => u.id !== reassignMember.id)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role === "founder" ? "Founder" : u.title})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <DialogFooter style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+                <Button type="button" variant="outline" onClick={() => setReassignMember(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="primary-pill">
+                  Confirm Transfer
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

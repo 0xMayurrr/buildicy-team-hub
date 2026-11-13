@@ -105,6 +105,7 @@ export function MetricCard({
   trend = "up",
   icon,
   footnote,
+  onClick,
 }: {
   label: string;
   value: string;
@@ -112,10 +113,15 @@ export function MetricCard({
   trend?: "up" | "down";
   icon: ReactNode;
   footnote: string;
+  onClick?: () => void;
 }) {
   const TrendIcon = trend === "up" ? ArrowUpRight : ArrowDownRight;
   return (
-    <article className="metric-card">
+    <article
+      className="metric-card"
+      onClick={onClick}
+      style={onClick ? { cursor: "pointer", transition: "transform 0.15s ease, box-shadow 0.15s ease" } : undefined}
+    >
       <div className="metric-card-top">
         <span className="metric-icon">{icon}</span>
         <Button

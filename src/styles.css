@@ -287,6 +287,8 @@
   text-align: left;
   font-size: 13px;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
   transition:
     background 0.15s,
     color 0.15s;
@@ -299,6 +301,17 @@
 .hub-nav button span {
   flex: 1;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-external-btn b {
+  color: var(--primary) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+}
+.nav-external-btn:hover {
+  color: var(--primary) !important;
 }
 .hub-nav button b {
   display: grid;
@@ -3099,13 +3112,38 @@
 .avatar-picker-dialog {
   max-width: 680px !important;
   width: min(680px, 95vw) !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) rgba(0, 0, 0, 0.08);
 }
-.avatar-picker-dialog::-webkit-scrollbar {
-  width: 6px;
+.avatar-picker-dialog::-webkit-scrollbar,
+.avatar-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-.avatar-picker-dialog::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  border-radius: 3px;
+.avatar-picker-dialog::-webkit-scrollbar-track,
+.avatar-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+}
+.avatar-picker-dialog::-webkit-scrollbar-thumb,
+.avatar-scroll-container::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--primary) 70%, #999);
+  border-radius: 6px;
+  border: 2px solid transparent;
+}
+.avatar-picker-dialog::-webkit-scrollbar-thumb:hover,
+.avatar-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+.avatar-scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) rgba(0, 0, 0, 0.08);
+  padding: 4px 6px 12px 2px;
 }
 .avatar-grid-container {
   display: grid;

@@ -95,33 +95,35 @@ export function AvatarPickerModal({
         style={{
           maxWidth: "680px",
           width: "min(680px, 95vw)",
-          maxHeight: "92vh",
-          overflowY: "auto",
-          padding: "24px 28px",
+          maxHeight: "min(680px, 92vh)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          padding: "20px 24px",
           borderRadius: "18px",
           boxSizing: "border-box",
         }}
       >
-        <DialogHeader style={{ textAlign: "center", marginBottom: "8px" }}>
+        <DialogHeader style={{ textAlign: "center", marginBottom: "4px", flexShrink: 0 }}>
           <div
             style={{
-              width: "44px",
-              height: "44px",
+              width: "40px",
+              height: "40px",
               borderRadius: "50%",
               background: "color-mix(in oklab, var(--primary) 12%, transparent)",
               color: "var(--primary)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 10px",
+              margin: "0 auto 8px",
             }}
           >
-            <User size={22} strokeWidth={2.2} />
+            <User size={20} strokeWidth={2.2} />
           </div>
-          <DialogTitle style={{ fontSize: "20px", fontWeight: 700 }}>
+          <DialogTitle style={{ fontSize: "19px", fontWeight: 700 }}>
             {isCompulsory ? "Welcome! Choose Your Avatar" : "Change Your Avatar"}
           </DialogTitle>
-          <DialogDescription style={{ fontSize: "13px", color: "var(--muted-foreground)", marginTop: "4px" }}>
+          <DialogDescription style={{ fontSize: "12.5px", color: "var(--muted-foreground)", marginTop: "2px" }}>
             {isCompulsory
               ? "Select an avatar that represents you across Buildicy Team Hub."
               : "Select an avatar for your Buildicy profile."}
@@ -134,18 +136,19 @@ export function AvatarPickerModal({
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            padding: "14px 0",
-            marginBottom: "12px",
+            padding: "10px 0 12px",
+            marginBottom: "8px",
             borderBottom: "1px solid var(--border)",
+            flexShrink: 0,
           }}
         >
           <div
             style={{
               position: "relative",
-              width: "82px",
-              height: "82px",
+              width: "72px",
+              height: "72px",
               borderRadius: "50%",
-              boxShadow: "0 0 0 4px var(--primary), 0 8px 24px color-mix(in oklab, var(--primary) 28%, transparent)",
+              boxShadow: "0 0 0 3px var(--primary), 0 6px 20px color-mix(in oklab, var(--primary) 28%, transparent)",
               overflow: "hidden",
               background: "var(--card)",
             }}
@@ -156,36 +159,36 @@ export function AvatarPickerModal({
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>
-          <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--foreground)", marginTop: "8px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--foreground)", marginTop: "6px" }}>
             {AVATAR_OPTIONS.find((a) => a.url === selectedUrl)?.name || "Selected Avatar"}
           </span>
-          <span style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
+          <span style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "1px" }}>
             {currentUser.name} · {currentUser.role === "founder" ? "Founder & CEO" : currentUser.title}
           </span>
         </div>
 
-        {/* 12 Avatar Grid */}
-        <div style={{ marginBottom: "16px" }}>
+        {/* Scrollable 12 Avatar Grid with visible scrollbar */}
+        <div className="avatar-scroll-container" style={{ flex: 1, minHeight: "180px", overflowY: "auto", overflowX: "hidden", paddingRight: "6px" }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "12px",
+              marginBottom: "10px",
               gap: "8px",
             }}
           >
-            <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--foreground)" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--foreground)" }}>
               Choose your avatar:
             </span>
             <span
               style={{
-                fontSize: "11.5px",
+                fontSize: "11px",
                 color: "var(--muted-foreground)",
                 fontWeight: 500,
               }}
             >
-              12 options
+              12 options (scroll down to see all)
             </span>
           </div>
 
@@ -211,7 +214,7 @@ export function AvatarPickerModal({
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    padding: "12px 6px 10px",
+                    padding: "10px 4px 8px",
                     borderRadius: "14px",
                     border: isSelected
                       ? "2px solid var(--primary)"
@@ -223,7 +226,7 @@ export function AvatarPickerModal({
                     position: "relative",
                     transition: "all 0.16s ease",
                     transform: isSelected ? "scale(1.02)" : "scale(1)",
-                    minHeight: "112px",
+                    minHeight: "108px",
                     boxShadow: isSelected
                       ? "0 4px 16px color-mix(in oklab, var(--primary) 22%, transparent)"
                       : "0 1px 3px rgba(0,0,0,0.03)",
@@ -234,16 +237,16 @@ export function AvatarPickerModal({
                   <div
                     style={{
                       position: "relative",
-                      width: "56px",
-                      height: "56px",
+                      width: "52px",
+                      height: "52px",
                       margin: "0 auto",
                       flexShrink: 0,
                     }}
                   >
                     <div
                       style={{
-                        width: "56px",
-                        height: "56px",
+                        width: "52px",
+                        height: "52px",
                         borderRadius: "50%",
                         overflow: "hidden",
                         background: "var(--muted)",
@@ -287,10 +290,10 @@ export function AvatarPickerModal({
                       fontSize: "11px",
                       fontWeight: isSelected ? 700 : 500,
                       color: isSelected ? "var(--primary)" : "var(--foreground)",
-                      marginTop: "8px",
+                      marginTop: "6px",
                       textAlign: "center",
                       lineHeight: "1.25",
-                      height: "28px",
+                      height: "26px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -307,7 +310,17 @@ export function AvatarPickerModal({
           </div>
         </div>
 
-        <DialogFooter style={{ display: "flex", gap: "10px", justifyContent: isCompulsory ? "center" : "flex-end" }}>
+        <DialogFooter
+          style={{
+            display: "flex",
+            gap: "10px",
+            justifyContent: isCompulsory ? "center" : "flex-end",
+            paddingTop: "14px",
+            borderTop: "1px solid var(--border)",
+            flexShrink: 0,
+            marginTop: "6px",
+          }}
+        >
           {!isCompulsory && (
             <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
               Cancel
