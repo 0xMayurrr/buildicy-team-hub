@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type FormEvent } from "react";
+﻿import { useState, useMemo, useEffect, useRef, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Hash,
@@ -355,7 +355,7 @@ export function TeamChat({ currentUser, users }: TeamChatProps) {
                     style={{
                       fontSize: "10px",
                       fontWeight: 700,
-                      background: active === d.id ? "#0f0f11" : "var(--muted)",
+                      background: active === d.id ? "var(--primary)" : "var(--muted)",
                       color: active === d.id ? "#fff" : "var(--muted-foreground)",
                       borderRadius: "10px",
                       padding: "1px 6px",

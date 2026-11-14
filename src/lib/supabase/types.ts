@@ -1,4 +1,4 @@
-export type UserRole = "founder" | "member";
+export type UserRole = "founder" | "member" | "techie";
 
 export type WorkingStatus =
   | "Researching"
@@ -8,7 +8,13 @@ export type WorkingStatus =
   | "Proposal Preparation"
   | "Other"
   | "Break"
-  | "Offline";
+  | "Offline"
+  | "In Development"
+  | "In Review"
+  | "Testing"
+  | "Blocked"
+  | "Deployment"
+  | "Planning";
 
 export interface UserProfile {
   id: string;
@@ -174,6 +180,44 @@ export interface DailyTask {
   text: string;
   done: boolean;
   time: string;
+  createdAt: string;
+}
+
+export type TechTaskStatus = "Pending" | "In Progress" | "In Review" | "Done" | "Blocked";
+export type TechTaskPriority = "Low" | "Medium" | "High" | "Urgent";
+
+export interface TechTask {
+  id: string;
+  assignedTo: string;
+  assignedToName: string;
+  assignedBy: string;
+  assignedByName: string;
+  title: string;
+  description: string;
+  priority: TechTaskPriority;
+  dueDate?: string | undefined;
+  status: TechTaskStatus;
+  progressPct: number;
+  techieNote?: string | undefined;
+  documentUrl?: string | undefined;
+  documentName?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TechDailyUpdate {
+  id: string;
+  userId: string;
+  userName: string;
+  userInitials: string;
+  userColor: string;
+  date: string;
+  workingStatus: WorkingStatus;
+  whatIWorkedOn: string;
+  blockers: string;
+  tomorrowPlan: string;
+  taskProgress: { taskId: string; taskTitle: string; progressPct: number; note: string }[];
+  overallProgressPct: number;
   createdAt: string;
 }
 

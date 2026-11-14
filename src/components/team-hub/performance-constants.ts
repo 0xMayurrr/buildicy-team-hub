@@ -52,6 +52,42 @@ export const WORKING_STATUS_CONFIG: Record<
     bgColor: "color-mix(in oklab, oklch(0.45 0.02 260) 12%, transparent)",
     description: "Shift ended or signed off",
   },
+  "In Development": {
+    label: "In Development",
+    dotColor: "oklch(0.53 0.23 292)",
+    bgColor: "color-mix(in oklab, oklch(0.53 0.23 292) 12%, transparent)",
+    description: "Actively building software features and writing code",
+  },
+  "In Review": {
+    label: "In Review",
+    dotColor: "oklch(0.65 0.2 240)",
+    bgColor: "color-mix(in oklab, oklch(0.65 0.2 240) 12%, transparent)",
+    description: "Code review, PR inspection and peer feedback",
+  },
+  Testing: {
+    label: "Testing",
+    dotColor: "oklch(0.7 0.18 50)",
+    bgColor: "color-mix(in oklab, oklch(0.7 0.18 50) 12%, transparent)",
+    description: "Running QA tests, edge cases and integration validation",
+  },
+  Blocked: {
+    label: "Blocked",
+    dotColor: "oklch(0.63 0.24 25)",
+    bgColor: "color-mix(in oklab, oklch(0.63 0.24 25) 12%, transparent)",
+    description: "Waiting on external dependencies, access or credentials",
+  },
+  Deployment: {
+    label: "Deployment",
+    dotColor: "oklch(0.6 0.2 150)",
+    bgColor: "color-mix(in oklab, oklch(0.6 0.2 150) 12%, transparent)",
+    description: "Deploying code, migrations and releasing to production",
+  },
+  Planning: {
+    label: "Planning",
+    dotColor: "oklch(0.55 0.24 290)",
+    bgColor: "color-mix(in oklab, oklch(0.55 0.24 290) 12%, transparent)",
+    description: "Architecture design, task breakdown and sprint planning",
+  },
 };
 
 /**

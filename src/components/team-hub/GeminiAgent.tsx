@@ -47,7 +47,13 @@ export interface ExecutedAction {
     | "LOG_OUTREACH"
     | "BATCH_IMPORT"
     | "BROADCAST_CHAT"
-    | "DISTRIBUTE_UNASSIGNED";
+    | "DISTRIBUTE_UNASSIGNED"
+    | "ASSIGN_TECH_TASK"
+    | "UPDATE_TECH_TASK"
+    | "NAVIGATE"
+    | "ADD_NOTIFICATION"
+    | "SUBMIT_DAILY_UPDATE"
+    | "UPDATE_WORKING_STATUS";
   label: string;
   leadId?: string | undefined;
   details?: Record<string, any> | undefined;
@@ -192,102 +198,115 @@ async function parseExcelFile(file: File): Promise<ParsedLead[]> {
 function buildSystemPrompt(user: UserProfile): string {
   const leads = HubStore.getLeads();
   const users = HubStore.getUsers();
+  const activities = HubStore.getActivities().slice(0, 10);
+  const outreach = HubStore.getOutreach().slice(0, 10);
+  const notifications = HubStore.getNotifications().slice(0, 5);
+  const channels = HubStore.getChannels();
+  const techTasks = HubStore.getTechTasks();
+  const techUpdates = HubStore.getTechDailyUpdates();
+  const dailyUpdates = HubStore.getDailyUpdates();
+  const isTechie = user.role === "techie";
   const isFounder = user.role === "founder";
 
-  const marketingTeam = users
-    .filter((u) => u.role !== "founder")
-    .map((u) => `• ${u.name} (ID: ${u.id}, Email: ${u.email}, Title: ${u.title}, Status: ${u.workingStatus || "Active"})`)
-    .join("\n");
+  const teamList = users.map((u) =>
+    `• ${u.name} | role: ${u.role} | id: ${u.id} | email: ${u.email} | title: ${u.title} | status: ${u.workingStatus || "Active"}`
+  ).join("\n");
 
-  const leadsOverview = leads.length > 0
-    ? leads.slice(0, 15).map((l) => `[ID: ${l.id}] ${l.name} | ${l.company} | $${l.value} | Status: ${l.status} | Owner: ${l.ownerName}`).join("\n")
-    : "No leads currently in workspace (Clean fresh state).";
+  const leadsList = leads.length > 0
+    ? leads.slice(0, 20).map((l) =>
+        `[${l.id}] ${l.name} | ${l.company} | value: ${l.value} | status: ${l.status} | owner: ${l.ownerName} | followup: ${l.nextFollowupDate || "none"}`
+      ).join("\n")
+    : "No leads in workspace.";
 
-  return `You are Buildicy AI, the intelligent workspace automation engine for Buildicy.
-You are interacting with ${user.name} (${user.role === "founder" ? "Founder & CEO - Executive Master Access" : `${user.title} (${user.department})`}).
+  const techTasksList = techTasks.length > 0
+    ? techTasks.map((t) =>
+        `[${t.id}] "${t.title}" | assigned to: ${t.assignedToName} | by: ${t.assignedByName} | priority: ${t.priority} | status: ${t.status} | progress: ${t.progressPct}% | due: ${t.dueDate || "none"}`
+      ).join("\n")
+    : "No tech tasks assigned.";
 
-CURRENT WORKSPACE REALITY:
-Verified Team Members:
-${marketingTeam}
+  const recentActivity = activities.map((a) =>
+    `• ${a.person} ${a.action} "${a.subject}" — ${a.detail}`
+  ).join("\n") || "No recent activity.";
 
-Current Active Leads in Workspace (${leads.length} total):
-${leadsOverview}
+  const myTechTasks = techTasks.filter((t) => t.assignedTo === user.id);
+  const myLeads = leads.filter((l) => l.ownerId === user.id || l.ownerName?.toLowerCase().includes(user.name?.toLowerCase()));
+  const myDailyUpdate = dailyUpdates.find((d) => d.userId === user.id && d.date === new Date().toISOString().slice(0, 10));
+  const myTechUpdate = techUpdates.find((d) => d.userId === user.id && d.date === new Date().toISOString().slice(0, 10));
 
-CRITICAL CAPABILITY: EXECUTING REAL ACTIONS
-You are NOT just a chat assistant. You have full permission to EXECUTE ACTIONS in the workspace when the user requests it.
-To execute an action, include a JSON block formatted exactly like this in your reply:
+  return `You are Buildicy AI — a fully autonomous workspace agent for Buildicy Team Hub.
+You have COMPLETE READ ACCESS to the live dashboard and MUST EXECUTE REAL ACTIONS automatically.
+You are talking to: ${user.name} (${user.role}${isTechie ? " — Tech Team" : ""})
+
+CRITICAL RULE: When a user asks you to DO something — DO IT IMMEDIATELY with an action block. Never just describe. ALWAYS execute the action.
+Examples: "help me write my daily update" = SUBMIT_TECH_UPDATE or SUBMIT_DAILY_UPDATE immediately using live data. "set status" = UPDATE_WORKING_STATUS immediately. "update task" = UPDATE_TECH_TASK immediately.
+
+═══════════════════════════════════════
+LIVE DASHBOARD SNAPSHOT
+═══════════════════════════════════════
+
+👥 TEAM (${users.length} members):
+${teamList}
+
+📋 LEADS PIPELINE (${leads.length} total):
+${leadsList}
+
+🔧 TECH TASKS (${techTasks.length} total):
+${techTasksList}
+
+📣 RECENT ACTIVITY:
+${recentActivity}
+
+💬 CHAT CHANNELS: ${channels.map((c) => `#${c.name}`).join(", ") || "None"}
+
+${isTechie ? `🛠️ YOUR TASKS (${myTechTasks.length}):
+${myTechTasks.map((t) => `• [${t.id}] "${t.title}" | ${t.status} | ${t.progressPct}% | due: ${t.dueDate || "none"}`).join("\n") || "No tasks yet."}
+
+📝 TODAY'S TECH UPDATE: ${myTechUpdate ? `Submitted — ${myTechUpdate.overallProgressPct}% overall` : "NOT submitted yet"}
+` : ""}
+${user.role === "member" ? `📊 YOUR LEADS (${myLeads.length}):
+${myLeads.slice(0, 8).map((l) => `• [${l.id}] ${l.name} | ${l.company} | ${l.status}`).join("\n") || "No leads."}
+
+📝 TODAY'S DAILY UPDATE: ${myDailyUpdate ? `Submitted — ${myDailyUpdate.totalOutreachCount} outreach` : "NOT submitted yet"}
+` : ""}
+
+═══════════════════════════════════════
+ACTION ENGINE
+═══════════════════════════════════════
+To execute, include this block in your reply:
 
 \`\`\`buildicy_action
-{
-  "action": "ACTION_TYPE",
-  "params": { ... }
-}
+{ "action": "ACTION_TYPE", "params": { ... } }
 \`\`\`
 
-Supported ACTION_TYPE options:
-1. "CREATE_LEAD":
-   params: {
-     "name": "Full Name",
-     "company": "Company Name",
-     "email": "email@example.com",
-     "phone": "+123...",
-     "value": 12000,
-     "status": "New" | "Contacted" | "Qualified" | "Proposal" | "Won" | "Lost",
-     "source": "LinkedIn" | "Website" | "Referral" | "Cold Email" | "Outreach",
-     "ownerName": "Ganesh" | "Dhruv" | "Padma" | "Heyy Founder" (defaults to ${user.name})
-   }
+ACTIONS:
+1. CREATE_LEAD — { name, company, email, phone, value, status, source, ownerName }
+2. UPDATE_LEAD_STATUS — { leadId, status }
+3. REASSIGN_LEAD — { leadId, newOwnerName }
+4. LOG_OUTREACH — { leadId, channel, notes, prospectResponse, isPositive }
+5. DISTRIBUTE_UNASSIGNED — {}
+6. BROADCAST_CHAT — { channelId, message }
+7. ASSIGN_TECH_TASK — { assignedToName, title, description, priority, dueDate } — FOUNDER ONLY
+8. UPDATE_TECH_TASK — { taskId, status, progressPct, techieNote } — TECHIE ONLY
+9. NAVIGATE — { view }
+10. ADD_NOTIFICATION — { title, body, userId }
+11. UPDATE_WORKING_STATUS — { status }
+12. SUBMIT_DAILY_UPDATE — { totalOutreachCount, emailCount, whatsappCount, callCount, meetingsBooked, positiveResponses, achievements, challenges, tomorrowPriorities, workingStatus } — MEMBER ONLY — use live outreach data to fill numbers automatically
+13. SUBMIT_TECH_UPDATE — { whatIWorkedOn, blockers, tomorrowPlan, overallProgressPct, workingStatus, taskProgress: [{taskId, progressPct, note}] } — TECHIE ONLY — use live task data to fill automatically
 
-2. "UPDATE_LEAD_STATUS":
-   params: {
-     "leadId": "LD-XXXX",
-     "status": "New" | "Contacted" | "Qualified" | "Proposal" | "Won" | "Lost"
-   }
+ROLE RULES:
+${isFounder ? `FOUNDER: Execute ALL actions. Be sharp and proactive.` : isTechie ? `TECHIE ${user.name}: Use UPDATE_TECH_TASK, UPDATE_WORKING_STATUS, SUBMIT_TECH_UPDATE, NAVIGATE only.
+When asked to write/submit daily update — read the live task snapshot above and IMMEDIATELY fire SUBMIT_TECH_UPDATE with real task data. Do NOT ask what they did.` : `MEMBER ${user.name}: Use CREATE_LEAD, LOG_OUTREACH, UPDATE_LEAD_STATUS, UPDATE_WORKING_STATUS, SUBMIT_DAILY_UPDATE, NAVIGATE.
+When asked to write/submit daily update — read live leads/outreach snapshot and IMMEDIATELY fire SUBMIT_DAILY_UPDATE with real numbers. Do NOT ask what they did.`}
 
-3. "REASSIGN_LEAD":
-   params: {
-     "leadId": "LD-XXXX",
-     "newOwnerName": "Ganesh" | "Dhruv" | "Padma" | "Heyy Founder"
-   }
-
-4. "LOG_OUTREACH":
-   params: {
-     "leadId": "LD-XXXX",
-     "channel": "Email" | "Call" | "WhatsApp" | "LinkedIn" | "Meeting",
-     "notes": "Discussion summary",
-     "prospectResponse": "Positive response" | "Interested - Needs info" | "Meeting booked" | "Proposal requested" | "Follow up later" | "Not interested",
-     "isPositive": true | false
-   }
-
-5. "DISTRIBUTE_UNASSIGNED":
-   params: {
-     "targetMembers": ["Ganesh", "Dhruv", "Padma"]
-   }
-
-6. "BROADCAST_CHAT":
-   params: {
-     "channelName": "marketing" | "sales",
-     "message": "Message text"
-   }
-
-ROLE INSTRUCTIONS:
-${isFounder ? `
-- You operate with EXECUTIVE FOUNDER AUDIT PRIVILEGES. 
-- The founder ONLY VIEWS and audits leads, monitors team member outreach, analyzes KPIs, and audits pipeline health.
-- Team members are responsible for uploading and adding leads. The founder does NOT upload leads.
-- When the founder asks to audit, reassign, or analyze leads, provide full executive analytics.
-- Be razor-sharp, executive-focused, proactive, and concise.
-` : `
-- You are a personal marketing copilot for ${user.name}.
-- When ${user.name} asks to log an outreach, create a lead, update a lead, or draft an update, generate the action block.
-- Help prioritize leads and keep daily momentum high.
-`}
-Always accompany actions with a concise, professional message explaining what was done. Keep regular chat under 150 words.`;
+Respond under 150 words. Always execute actions immediately. Never just describe — DO IT.`;
 }
 
 export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgentProps) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const MESSAGE_LIMIT = 20;
+  const [userMsgCount, setUserMsgCount] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -297,6 +316,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const isFounder = currentUser.role === "founder";
+  const isTechie = currentUser.role === "techie";
   const users = useMemo(() => HubStore.getUsers(), [open]);
 
   // Initial greeting
@@ -311,7 +331,9 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
           : "Good evening";
 
       const greeting = isFounder
-        ? `${timeGreeting}, Founder 👋 **Buildicy AI** is standing by.\n\nI provide executive pipeline and performance audits. You can:\n• **Audit workspace pipeline & team performance** in real time\n• **Review outreach interactions & response rates** across team members\n• **Analyze revenue metrics & conversion KPIs**\n• **Reassign leads & broadcast updates**`
+        ? `${timeGreeting}, Founder 👋 **Buildicy AI** is standing by.\n\nI have full live access to your entire dashboard. I can:\n• **Audit pipeline, team KPIs & outreach stats** in real time\n• **Assign tech tasks** to your tech team members\n• **Reassign leads, broadcast to chat, send notifications**\n• **Navigate to any section** of the workspace`
+        : isTechie
+        ? `${timeGreeting}, ${currentUser.name} 👋 **Buildicy AI** is your tech copilot.\n\nI can see all your assigned tasks and I can:\n• **Show your assigned projects & task details**\n• **Update task status and progress** for you\n• **Set your working status** (In Development, Blocked, etc.)\n• **Help write your daily tech update**`
         : `${timeGreeting}, ${currentUser.name} 👋 **Buildicy AI** is ready.\n\nI can:\n• **Upload Excel/CSV lead sheets** directly into your pipeline\n• **Add new leads & log outreach** automatically\n• **Draft high-converting outreach emails & WhatsApp follow-ups**\n• **Prepare your daily performance updates**`;
 
       setMessages([{ role: "assistant", text: greeting }]);
@@ -435,6 +457,161 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
             });
             toast.success(`Distributed ${count} leads across the team!`);
           }
+        } else if (parsed.action === "ASSIGN_TECH_TASK" && parsed.params) {
+          const p = parsed.params;
+          const techie = users.find((u) =>
+            u.role === "techie" && u.name.toLowerCase().includes(String(p.assignedToName || "").toLowerCase())
+          ) || users.find((u) => u.role === "techie");
+          if (techie) {
+            HubStore.assignTechTask({
+              assignedTo: techie.id,
+              assignedToName: techie.name,
+              assignedBy: currentUser.id,
+              assignedByName: currentUser.name,
+              title: p.title || "New Task",
+              description: p.description || "",
+              priority: (p.priority as any) || "Medium",
+              dueDate: p.dueDate || undefined,
+              documentUrl: p.documentUrl || "",
+              documentName: p.documentName || "",
+            });
+            actions.push({
+              type: "ASSIGN_TECH_TASK",
+              label: `Task Assigned to ${techie.name}: "${p.title}"`,
+              details: { assignedTo: techie.name, priority: p.priority || "Medium", due: p.dueDate || "No due date" },
+              timestamp: now,
+            });
+            toast.success(`Tech task assigned to ${techie.name}!`);
+          }
+        } else if (parsed.action === "UPDATE_TECH_TASK" && parsed.params) {
+          const p = parsed.params;
+          if (p.taskId) {
+            HubStore.updateTechTaskStatus(p.taskId, p.status || "In Progress", Number(p.progressPct) || 0, p.techieNote || "");
+            actions.push({
+              type: "UPDATE_TECH_TASK",
+              label: `Task Updated: ${p.status} · ${p.progressPct}%`,
+              details: { taskId: p.taskId, status: p.status, progress: `${p.progressPct}%` },
+              timestamp: now,
+            });
+            toast.success(`Task updated to ${p.status} (${p.progressPct}%)`);
+          }
+        } else if (parsed.action === "NAVIGATE" && parsed.params?.view) {
+          if (onNavigate) {
+            onNavigate(parsed.params.view);
+            actions.push({
+              type: "NAVIGATE",
+              label: `Navigated to ${parsed.params.view}`,
+              details: { view: parsed.params.view },
+              timestamp: now,
+            });
+          }
+        } else if (parsed.action === "ADD_NOTIFICATION" && parsed.params) {
+          const p = parsed.params;
+          HubStore.addNotification({
+            title: p.title || "AI Notification",
+            body: p.body || "",
+            time: "Just now",
+            userId: p.userId || "all",
+          });
+          actions.push({
+            type: "ADD_NOTIFICATION",
+            label: `Notification sent: "${p.title}"`,
+            details: { to: p.userId || "all" },
+            timestamp: now,
+          });
+          toast.success(`Notification sent!`);
+        } else if (parsed.action === "UPDATE_WORKING_STATUS" && parsed.params?.status) {
+          HubStore.updateUserWorkingStatus(currentUser.id, parsed.params.status);
+          actions.push({
+            type: "UPDATE_WORKING_STATUS",
+            label: `Status set to: ${parsed.params.status}`,
+            details: { status: parsed.params.status },
+            timestamp: now,
+          });
+          toast.success(`Working status updated to ${parsed.params.status}`);
+        } else if (parsed.action === "SUBMIT_DAILY_UPDATE" && parsed.params) {
+          const p = parsed.params;
+          const myLeads = HubStore.getLeads().filter((l) => l.ownerId === currentUser.id || (l.ownerName || "").toLowerCase().includes((currentUser.name || "").toLowerCase()));
+          const myOutreach = HubStore.getOutreach({ userId: currentUser.id });
+          const emailC = Number(p.emailCount) || myOutreach.filter((o) => o.channel === "Email").length;
+          const waC = Number(p.whatsappCount) || myOutreach.filter((o) => o.channel === "WhatsApp").length;
+          const callC = Number(p.callCount) || myOutreach.filter((o) => o.channel === "Call").length;
+          const total = Number(p.totalOutreachCount) || myOutreach.length;
+          const meetings = Number(p.meetingsBooked) || myOutreach.filter((o) => o.prospectResponse === "Meeting booked").length;
+          const positive = Number(p.positiveResponses) || myOutreach.filter((o) => o.isPositive).length;
+          HubStore.submitDailyUpdate({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userInitials: currentUser.initials,
+            userColor: currentUser.color,
+            date: new Date().toISOString().slice(0, 10),
+            workingStatus: (p.workingStatus as any) || currentUser.workingStatus || "Outreach",
+            newLeadsCount: myLeads.filter((l) => l.createdAt?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
+            emailOutreachCount: emailC,
+            whatsappOutreachCount: waC,
+            callOutreachCount: callC,
+            totalOutreachCount: total,
+            responsesReceivedCount: myOutreach.filter((o) => o.prospectResponse !== "No response yet").length,
+            positiveResponsesCount: positive,
+            meetingsBookedCount: meetings,
+            proposalsRequestedCount: myOutreach.filter((o) => o.prospectResponse === "Proposal requested").length,
+            completedFollowupsCount: myOutreach.filter((o) => (o.notes || "").toLowerCase().includes("follow")).length,
+            pendingFollowupsCount: myLeads.filter((l) => l.nextFollowupDate && !["Won","Lost"].includes(l.status)).length,
+            achievements: p.achievements || "",
+            challenges: p.challenges || "",
+            tomorrowPriorities: p.tomorrowPriorities || "",
+          });
+          actions.push({
+            type: "SUBMIT_DAILY_UPDATE" as any,
+            label: `Daily Update Submitted — ${total} outreach, ${meetings} meetings`,
+            details: { email: emailC, whatsapp: waC, calls: callC, meetings, positive },
+            timestamp: now,
+          });
+          toast.success("Daily update submitted!");
+        } else if (parsed.action === "SUBMIT_TECH_UPDATE" && parsed.params) {
+          const p = parsed.params;
+          const myTasks = HubStore.getTechTasks({ assignedTo: currentUser.id });
+          const taskProgress = Array.isArray(p.taskProgress) ? p.taskProgress : myTasks.map((t) => ({ taskId: t.id, progressPct: t.progressPct, note: t.techieNote || "" }));
+          // Also update each task's progress in store
+          taskProgress.forEach((tp: any) => {
+            if (tp.taskId && tp.progressPct !== undefined) {
+              const task = myTasks.find((t) => t.id === tp.taskId);
+              if (task) HubStore.updateTechTaskStatus(tp.taskId, task.status, Number(tp.progressPct), tp.note || "");
+            }
+          });
+          HubStore.submitTechDailyUpdate({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userInitials: currentUser.initials,
+            userColor: currentUser.color,
+            date: new Date().toISOString().slice(0, 10),
+            workingStatus: (p.workingStatus as any) || currentUser.workingStatus || "In Development",
+            whatIWorkedOn: p.whatIWorkedOn || myTasks.map((t) => t.title).join(", ") || "Worked on assigned tasks",
+            blockers: p.blockers || "",
+            tomorrowPlan: p.tomorrowPlan || "",
+            taskProgress,
+            overallProgressPct: Number(p.overallProgressPct) || Math.round(myTasks.reduce((s, t) => s + t.progressPct, 0) / Math.max(myTasks.length, 1)),
+          });
+          actions.push({
+            type: "SUBMIT_DAILY_UPDATE" as any,
+            label: `Tech Daily Update Submitted — ${p.overallProgressPct || 0}% overall`,
+            details: { tasks: myTasks.length, blockers: p.blockers || "None" },
+            timestamp: now,
+          });
+          toast.success("Tech daily update submitted!");
+        } else if (parsed.action === "BROADCAST_CHAT" && parsed.params) {
+          const p = parsed.params;
+          const channelId = p.channelId || p.channelName || "";
+          if (channelId && p.message) {
+            HubStore.sendChatMessage(channelId, p.message);
+            actions.push({
+              type: "BROADCAST_CHAT",
+              label: `Message sent to #${channelId}`,
+              details: { channel: channelId, preview: String(p.message).slice(0, 60) },
+              timestamp: now,
+            });
+            toast.success(`Message broadcast to #${channelId}`);
+          }
         }
       } catch (err) {
         console.warn("Failed to parse action JSON:", err);
@@ -445,9 +622,6 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
     return { cleanText, executedActions: actions };
   };
 
-  /**
-   * Smart Local Workspace Engine: handles direct queries with live database stats
-   */
   const generateWorkspaceResponse = (
     queryText: string,
     user: UserProfile,
@@ -455,113 +629,142 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
     const q = queryText.toLowerCase().trim();
     const leads = HubStore.getLeads();
     const users = HubStore.getUsers();
+    const techTasks = HubStore.getTechTasks({ assignedTo: user.id });
     const mine = leads.filter(
-      (l) =>
-        l.ownerId === user.id ||
-        (l.ownerName || "").toLowerCase().includes((user.name || "").toLowerCase()),
+      (l) => l.ownerId === user.id || (l.ownerName || "").toLowerCase().includes((user.name || "").toLowerCase()),
     );
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const actions: ExecutedAction[] = [];
 
-    // 1. Leads assigned query
-    if (
-      q.includes("how many leads") ||
-      q.includes("leads are assigned") ||
-      q.includes("my leads") ||
-      (q.includes("leads") && q.includes("assigned"))
-    ) {
+    // Tech: show my tasks
+    if (user.role === "techie" && (q.includes("task") || q.includes("project") || q.includes("assigned"))) {
+      if (techTasks.length === 0) {
+        return { cleanText: `📋 **Your Assigned Tasks:**\n\nNo tasks assigned yet. The founder will assign projects to you here. Check back soon!`, executedActions: [] };
+      }
+      const taskLines = techTasks.map((t) =>
+        `• **${t.title}** | ${t.status} | ${t.progressPct}% | Priority: ${t.priority}${t.dueDate ? ` | Due: ${t.dueDate}` : ""}`
+      ).join("\n");
+      return { cleanText: `📋 **Your Assigned Tasks (${techTasks.length}):**\n\n${taskLines}\n\nYou can say *"Update [task name] to In Progress at 40%"* and I'll do it for you!`, executedActions: [] };
+    }
+
+    // Tech: set status
+    if (q.includes("set") && q.includes("status") || q.includes("in development") || q.includes("blocked") || q.includes("in review") || q.includes("testing")) {
+      const statusMap: Record<string, string> = {
+        "in development": "In Development", "blocked": "Blocked", "in review": "In Review",
+        "testing": "Testing", "planning": "Planning", "deployment": "Deployment", "break": "Break", "offline": "Offline",
+        "outreach": "Outreach", "follow-ups": "Follow-ups", "meetings": "Meetings",
+      };
+      const matched = Object.keys(statusMap).find((k) => q.includes(k));
+      if (matched) {
+        const status = statusMap[matched] as any;
+        HubStore.updateUserWorkingStatus(user.id, status);
+        actions.push({ type: "UPDATE_WORKING_STATUS", label: `Status set to ${status}`, details: { status }, timestamp: now });
+        toast.success(`Working status set to ${status}`);
+        return { cleanText: `✅ Your working status has been updated to **${status}**.`, executedActions: actions };
+      }
+    }
+
+    // Tech: daily update help — auto-submit
+    if (user.role === "techie" && (q.includes("daily") || q.includes("update") || q.includes("standup"))) {
+      const pending = techTasks.filter((t) => t.status !== "Done").length;
+      const blocked = techTasks.filter((t) => t.status === "Blocked");
+      const overallPct = techTasks.length > 0 ? Math.round(techTasks.reduce((s, t) => s + t.progressPct, 0) / techTasks.length) : 0;
+      const taskProgress = techTasks.map((t) => ({ taskId: t.id, taskTitle: t.title, progressPct: t.progressPct, note: t.techieNote || "" }));
+      HubStore.submitTechDailyUpdate({
+        userId: user.id,
+        userName: user.name,
+        userInitials: user.initials,
+        userColor: user.color,
+        date: new Date().toISOString().slice(0, 10),
+        workingStatus: (user.workingStatus as any) || "In Development",
+        whatIWorkedOn: techTasks.length > 0 ? techTasks.map((t) => t.title).join(", ") : "Worked on assigned tasks",
+        blockers: blocked.length > 0 ? blocked.map((t) => t.title).join(", ") : "",
+        tomorrowPlan: `Continue with ${pending} pending task(s). Target completing at least one to Done.`,
+        taskProgress,
+        overallProgressPct: overallPct,
+      });
+      actions.push({ type: "UPDATE_WORKING_STATUS", label: `Tech Daily Update Submitted — ${overallPct}% overall`, details: { tasks: techTasks.length, blocked: blocked.length }, timestamp: now });
+      toast.success("Tech daily update submitted!");
+      return {
+        cleanText: `✅ **Tech Daily Update Submitted!**\n\n• **Worked on:** ${techTasks.map((t) => t.title).join(", ") || "Assigned tasks"}\n• **Overall progress:** ${overallPct}%\n• **Blockers:** ${blocked.length > 0 ? blocked.map((t) => t.title).join(", ") : "None"}\n• **Tomorrow:** Continue ${pending} pending task(s)\n\nUpdate saved to your dashboard!`,
+        executedActions: actions,
+      };
+    }
+
+    // Leads assigned query
+    if (q.includes("how many leads") || q.includes("my leads") || (q.includes("leads") && q.includes("assigned"))) {
       const totalVal = mine.reduce((s, l) => s + (Number(l.value) || 0), 0);
       const byStatus: Record<string, number> = {};
-      mine.forEach((l) => {
-        byStatus[l.status] = (byStatus[l.status] || 0) + 1;
-      });
-      const statusLines = Object.entries(byStatus)
-        .map(([st, count]) => `• **${st}**: ${count}`)
-        .join("\n");
-
+      mine.forEach((l) => { byStatus[l.status] = (byStatus[l.status] || 0) + 1; });
+      const statusLines = Object.entries(byStatus).map(([st, count]) => `• **${st}**: ${count}`).join("\n");
       return {
-        cleanText: `📊 **Your Assigned Pipeline Summary:**\n\nYou have **${mine.length} active leads** assigned with a combined pipeline value of **$${totalVal.toLocaleString()}**.\n\n**Status Breakdown:**\n${statusLines || "• No leads assigned yet"}\n\n💡 **Action recommendation:** Focus on your qualified prospects and direct them to [calendar.buildicy.com](https://calendar.buildicy.com/) to schedule discovery calls!`,
+        cleanText: `📊 **Your Pipeline:** ${mine.length} leads · $${totalVal.toLocaleString()} value\n\n${statusLines || "• No leads yet"}`,
         executedActions: [],
       };
     }
 
-    // 2. Daily update query
-    if (
-      q.includes("daily update") ||
-      q.includes("write my update") ||
-      q.includes("help me write") ||
-      q.includes("progress update")
-    ) {
-      const outreach = HubStore.getOutreach({ userId: user.id });
-      return {
-        cleanText: `📋 **Drafted Daily Performance Update for ${user.name}:**\n\n**🌟 Daily Achievements & Progress:**\n• Conducted ${Math.max(outreach.length, 14)} outreach touchpoints across WhatsApp, email & phone.\n• Re-engaged active prospects and shared consultation booking links.\n• Qualified new leads for the development sprint.\n\n**🚧 Challenges & Blockers:**\n• Encountered gatekeeper responses on cold emails; shifting outreach to verified decision-makers on LinkedIn & WhatsApp.\n\n**🎯 Tomorrow's Top Priorities:**\n1. Follow up with scheduled warm leads.\n2. Book at least 2 client discovery meetings via [Buildicy Calendar](https://calendar.buildicy.com/).\n3. Qualify 5 new prospective accounts.\n\n*(You can copy and paste this directly into your Daily Workspace reporting form!)*`,
-        executedActions: [],
-      };
-    }
-
-    // 3. WhatsApp follow-up draft
-    if (
-      q.includes("whatsapp") ||
-      q.includes("draft a follow-up") ||
-      q.includes("follow-up message") ||
-      q.includes("template")
-    ) {
-      const sampleLead = mine[0] || leads[0];
-      const prospectName = sampleLead?.name || "[Prospect Name]";
-      const company = sampleLead?.company || "[Company Name]";
-
-      return {
-        cleanText: `💬 **High-Converting WhatsApp Follow-up Template:**\n\n---\n*Hey ${prospectName} 👋 Hope you're having a productive week!*\n\n*Following up on our chat regarding digital development for ${company}. Buildicy specializes in delivering modern, full-stack web applications and AI-driven platforms with unmatched speed and engineering quality.*\n\n*I'd love to invite you to a quick 10-minute discovery consultation to see how we can bring your concept to life. Feel free to grab a convenient time directly on our calendar here:* \n👉 https://calendar.buildicy.com/\n\n*Looking forward to speaking soon!*\n*Best regards,*\n*${user.name} | Buildicy*\n---`,
-        executedActions: [],
-      };
-    }
-
-    // 4. Next priority / What to do today
-    if (
-      q.includes("priority") ||
-      q.includes("next step") ||
-      q.includes("focus today") ||
-      q.includes("what should i do")
-    ) {
-      const followups = mine.filter((l) => Boolean(l.nextFollowupDate));
-      return {
-        cleanText: `🎯 **Your Top Recommended Priorities for Today:**\n\n1. **Pending Follow-ups (${followups.length} scheduled):** Review your leads due for follow-up and send personalized check-ins.\n2. **Book Client Consultations:** Direct your warmest prospects to [https://calendar.buildicy.com/](https://calendar.buildicy.com/) to confirm discovery calls.\n3. **Outreach Logging:** Log every WhatsApp interaction, phone call, and email in the workspace to keep your conversion stats updated.\n4. **Daily Reporting:** Complete and submit your daily work summary before end of day.`,
-        executedActions: [],
-      };
-    }
-
-    // 5. Book Appointment / Calendar query
-    if (
-      q.includes("appointment") ||
-      q.includes("book") ||
-      q.includes("calendar") ||
-      q.includes("schedule")
-    ) {
-      return {
-        cleanText: `📅 **Buildicy Appointment Booking:**\n\nYou and your clients can schedule appointments and discovery calls directly at:\n\n👉 **[https://calendar.buildicy.com/](https://calendar.buildicy.com/)**\n\nInclude this link in your outreach pitches to allow clients to instantly choose a meeting slot!`,
-        executedActions: [],
-      };
-    }
-
-    // 6. Founder Audit query
-    if (
-      user.role === "founder" ||
-      q.includes("audit") ||
-      q.includes("team performance") ||
-      q.includes("kpi")
-    ) {
+    // Founder audit
+    if (user.role === "founder" || q.includes("audit") || q.includes("team performance") || q.includes("kpi")) {
       const totalVal = leads.reduce((s, l) => s + (Number(l.value) || 0), 0);
-      const active = leads.filter((l) => !["Won", "Lost"].includes(l.status)).length;
       const won = leads.filter((l) => l.status === "Won").length;
       const reps = users.filter((u) => u.role !== "founder");
-
+      const techies = users.filter((u) => u.role === "techie");
+      const allTechTasks = HubStore.getTechTasks();
       return {
-        cleanText: `📈 **Executive Team & Pipeline Audit:**\n\n• **Active Team Members:** ${reps.length} (${reps.map((r) => r.name).join(", ")})\n• **Total Pipeline Value:** $${totalVal.toLocaleString()}\n• **Active Pipeline Deals:** ${active}\n• **Closed Deals Won:** ${won}\n• **Live Appointments & Calendar:** View live client bookings at [https://calendar.buildicy.com/](https://calendar.buildicy.com/).\n\n*All team members are actively tracking outreach and follow-ups in the workspace.*`,
+        cleanText: `📈 **Executive Dashboard Audit:**\n\n• **Pipeline:** ${leads.length} leads · $${totalVal.toLocaleString()} total value · ${won} won\n• **Marketing Team:** ${reps.filter((u) => u.role === "member").length} members active\n• **Tech Team:** ${techies.length} members · ${allTechTasks.length} tasks assigned\n• **Appointments:** [calendar.buildicy.com](https://calendar.buildicy.com/)`,
         executedActions: [],
       };
     }
 
-    // Default intelligent response
+    // Daily update — auto-submit for members
+    if (q.includes("daily update") || q.includes("write my update") || q.includes("progress update") || q.includes("submit")) {
+      const myOutreach = HubStore.getOutreach({ userId: user.id });
+      const emailC = myOutreach.filter((o) => o.channel === "Email").length;
+      const waC = myOutreach.filter((o) => o.channel === "WhatsApp").length;
+      const callC = myOutreach.filter((o) => o.channel === "Call").length;
+      const meetings = myOutreach.filter((o) => o.prospectResponse === "Meeting booked").length;
+      const positive = myOutreach.filter((o) => o.isPositive).length;
+      HubStore.submitDailyUpdate({
+        userId: user.id,
+        userName: user.name,
+        userInitials: user.initials,
+        userColor: user.color,
+        date: new Date().toISOString().slice(0, 10),
+        workingStatus: (user.workingStatus as any) || "Outreach",
+        newLeadsCount: mine.filter((l) => l.createdAt?.slice(0, 10) === new Date().toISOString().slice(0, 10)).length,
+        emailOutreachCount: emailC,
+        whatsappOutreachCount: waC,
+        callOutreachCount: callC,
+        totalOutreachCount: myOutreach.length,
+        responsesReceivedCount: myOutreach.filter((o) => o.prospectResponse !== "No response yet").length,
+        positiveResponsesCount: positive,
+        meetingsBookedCount: meetings,
+        proposalsRequestedCount: myOutreach.filter((o) => o.prospectResponse === "Proposal requested").length,
+        completedFollowupsCount: myOutreach.filter((o) => (o.notes || "").toLowerCase().includes("follow")).length,
+        pendingFollowupsCount: mine.filter((l) => l.nextFollowupDate && !["Won","Lost"].includes(l.status)).length,
+        achievements: `${myOutreach.length} outreach attempts, ${meetings} meetings booked`,
+        challenges: "Gatekeeper responses on cold emails — shifting to LinkedIn.",
+        tomorrowPriorities: `Follow up warm leads, book discovery calls via calendar.buildicy.com`,
+      });
+      actions.push({ type: "UPDATE_WORKING_STATUS", label: `Daily Update Submitted — ${myOutreach.length} outreach`, details: { email: emailC, whatsapp: waC, calls: callC, meetings }, timestamp: now });
+      toast.success("Daily update submitted!");
+      return {
+        cleanText: `✅ **Daily Update Submitted!**\n\n• **Total outreach:** ${myOutreach.length} (Email: ${emailC}, WhatsApp: ${waC}, Calls: ${callC})\n• **Meetings booked:** ${meetings}\n• **Positive responses:** ${positive}\n• **Tomorrow:** Follow up warm leads, book discovery calls\n\nUpdate saved to your dashboard!`,
+        executedActions: actions,
+      };
+    }
+
+    // WhatsApp template
+    if (q.includes("whatsapp") || q.includes("follow-up message") || q.includes("template")) {
+      const sampleLead = mine[0] || leads[0];
+      return {
+        cleanText: `💬 **WhatsApp Follow-up Template:**\n\n---\n*Hey ${sampleLead?.name || "[Name]"} 👋 Following up on our chat about ${sampleLead?.company || "your project"}.*\n\n*I'd love to schedule a quick 10-min discovery call. Grab a time here:*\n👉 https://calendar.buildicy.com/\n\n*Best, ${user.name} | Buildicy*\n---`,
+        executedActions: [],
+      };
+    }
+
     return {
-      cleanText: `🤖 **Buildicy AI Copilot:**\n\nI processed your request regarding "${queryText}".\n\n• **Workspace Status:** Live connection to Buildicy Workspace active.\n• **Pipeline Count:** ${leads.length} total leads tracked.\n• **Appointments:** Bookings active at [calendar.buildicy.com](https://calendar.buildicy.com/).\n\nFeel free to ask me:\n1. *"How many leads are assigned to me?"*\n2. *"Help me write my daily update"*\n3. *"Draft a follow-up WhatsApp message"*\n4. *"What is my next priority today?"*`,
+      cleanText: `🤖 **Buildicy AI** — Live workspace connected.\n\n• ${leads.length} leads in pipeline\n• ${users.length} team members active\n\nTry asking:\n• *"Show my assigned tasks"* (tech)\n• *"How many leads do I have?"*\n• *"Help me write my daily update"*\n• *"Set my status to In Development"*`,
       executedActions: [],
     };
   };
@@ -575,6 +778,21 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
     setInput("");
 
     const updated: Message[] = [...messages, { role: "user", text }];
+    const newCount = userMsgCount + 1;
+
+    // Hit token limit — count only user messages
+    if (newCount > MESSAGE_LIMIT) {
+      setMessages([
+        { role: "assistant", text: "🔄 **Session limit reached (20 messages).** Refreshing workspace context..." },
+      ]);
+      setTimeout(() => {
+        setMessages([{ role: "assistant", text: `✅ **Fresh session started!** How can I help you, ${currentUser.name}?` }]);
+        setUserMsgCount(0);
+      }, 1200);
+      return;
+    }
+    setUserMsgCount(newCount);
+
     setMessages(updated);
     setLoading(true);
 
@@ -805,7 +1023,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                 <div className="ai-title-row">
                   <strong>Buildicy AI</strong>
                   <span className="ai-badge-role">
-                    {isFounder ? "Founder Takeover Mode" : `${currentUser.name} Copilot`}
+                    {isFounder ? "Founder Takeover Mode" : isTechie ? `${currentUser.name} Tech Copilot` : `${currentUser.name} Copilot`}
                   </span>
                 </div>
                 <small className="ai-status-sub">
@@ -1043,6 +1261,13 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                         "🎯 What are our highest value deals?",
                         "📢 Send morning motivation to chat",
                       ]
+                    : isTechie
+                    ? [
+                        "📋 Show my assigned tasks",
+                        "🔧 Set my status to In Development",
+                        "✍️ Help me write my daily tech update",
+                        "⚠️ I have a blocker on my task",
+                      ]
                     : [
                         "📥 How many leads are assigned to me?",
                         "✍️ Help me write my daily update",
@@ -1060,6 +1285,19 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                   ))}
                 </div>
               )}
+
+              {/* Token counter */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 14px", fontSize: "10.5px", color: userMsgCount >= 18 ? "oklch(0.55 0.22 25)" : "var(--muted-foreground)" }}>
+                <span>{userMsgCount}/{MESSAGE_LIMIT} messages used</span>
+                {userMsgCount >= 18 && <span style={{ fontWeight: 600 }}>⚠️ Session resets at 20</span>}
+                <button
+                  type="button"
+                  onClick={() => { setMessages([]); setUserMsgCount(0); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary)", fontSize: "10.5px", fontWeight: 600 }}
+                >
+                  Reset session
+                </button>
+              </div>
 
               {/* Minimalist Input Composer */}
               <form

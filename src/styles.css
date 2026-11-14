@@ -82,19 +82,19 @@
   --card-foreground: oklch(0.22 0.025 280);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.025 280);
-  --primary: #0f0f11;
+  --primary: oklch(0.53 0.23 292);
   --primary-foreground: #ffffff;
   --secondary: #f4f4f5;
   --secondary-foreground: #18181b;
   --muted: #f4f4f5;
   --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #09090b;
+  --accent: oklch(0.94 0.035 292);
+  --accent-foreground: oklch(0.39 0.18 292);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #0f0f11;
+  --ring: oklch(0.64 0.18 292);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -102,12 +102,12 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: #ffffff;
   --sidebar-foreground: #18181b;
-  --sidebar-primary: #0f0f11;
+  --sidebar-primary: oklch(0.53 0.23 292);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f4f5;
-  --sidebar-accent-foreground: #09090b;
+  --sidebar-accent: oklch(0.94 0.035 292);
+  --sidebar-accent-foreground: oklch(0.39 0.18 292);
   --sidebar-border: #e4e4e7;
-  --sidebar-ring: #0f0f11;
+  --sidebar-ring: oklch(0.64 0.18 292);
 }
 
 .dark {
@@ -330,11 +330,11 @@
   color: var(--foreground);
 }
 .hub-nav button.active {
-  background: #0f0f11 !important;
+  background: var(--primary) !important;
   color: #ffffff !important;
   border-radius: 999px !important;
   font-weight: 600 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14) !important;
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--primary) 30%, transparent) !important;
 }
 .hub-nav button.active > svg {
   color: #ffffff !important;
@@ -344,7 +344,7 @@
   color: #ffffff !important;
 }
 .hub-nav button.active b {
-  background: #27272a !important;
+  background: rgba(255, 255, 255, 0.25) !important;
   color: #ffffff !important;
 }
 .sidebar-team {
@@ -589,17 +589,17 @@
 .primary-pill {
   height: 38px;
   border-radius: 9999px !important;
-  background: #0f0f11 !important;
+  background: var(--primary) !important;
   color: #ffffff !important;
   font-size: 13px;
   font-weight: 600;
   padding: 0 18px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--primary) 28%, transparent);
   border: none;
   transition: all 0.15s ease;
 }
 .primary-pill:hover {
-  background: #27272a !important;
+  background: color-mix(in oklab, var(--primary) 85%, black) !important;
   color: #ffffff !important;
   transform: translateY(-1px);
 }
@@ -763,10 +763,10 @@
   transition: all 0.15s ease;
 }
 .segmented button.active {
-  background: #0f0f11 !important;
+  background: var(--primary) !important;
   color: #ffffff !important;
   font-weight: 600 !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .bar-chart {
   display: flex;
@@ -1621,9 +1621,9 @@
   transition: all 0.15s ease;
 }
 .currency-btn.active {
-  background: #0f0f11 !important;
+  background: var(--primary) !important;
   color: #ffffff !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .composer {
   display: flex;
@@ -3610,10 +3610,10 @@
   border-top-left-radius: 4px;
 }
 .ai-bubble.user {
-  background: #0f0f11;
+  background: var(--primary);
   color: #ffffff;
   border-top-right-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .ai-typing-indicator {
   display: flex;
@@ -3790,13 +3790,13 @@
   border-color: rgba(139, 92, 246, 0.4);
 }
 .file-btn.primary {
-  background: #0f0f11;
+  background: var(--primary);
   color: #ffffff;
   border: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .file-btn.primary:hover {
-  background: #27272a;
+  background: color-mix(in oklab, var(--primary) 85%, black);
   transform: translateY(-1px);
 }
 .file-btn-subgroup {
@@ -3824,8 +3824,8 @@
   transition: all 0.15s ease;
 }
 .ai-quick-btn:hover {
-  background: #0f0f11;
-  border-color: #0f0f11;
+  background: var(--primary);
+  border-color: var(--primary);
   color: #ffffff;
 }
 
@@ -3853,9 +3853,9 @@
   flex: none;
 }
 .ai-attach-btn:hover {
-  background: #f4f4f5;
-  color: #0f0f11;
-  border-color: #0f0f11;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .ai-input-field {
   flex: 1;
@@ -3870,25 +3870,25 @@
   transition: all 0.15s ease;
 }
 .ai-input-field:focus {
-  border-color: #0f0f11;
+  border-color: var(--primary);
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(15, 15, 17, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 15%, transparent);
 }
 .ai-submit-btn {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: #0f0f11;
+  background: var(--primary);
   color: #ffffff;
   flex: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--primary) 25%, transparent);
   transition: all 0.15s ease;
 }
 .ai-submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #27272a;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  background: color-mix(in oklab, var(--primary) 85%, black);
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
 @media (max-width: 760px) {

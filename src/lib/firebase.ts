@@ -14,18 +14,40 @@ const VAPID_KEY = "BJbJ5ooWFio7Jg_b126Xlf1wbzBTpx6Ya9A_-6sTUZKnwcfD7nD66qLoJAXXh
 
 const app = initializeApp(firebaseConfig);
 
-export const messaging = typeof window !== "undefined" ? getMessaging(app) : null;
+function isServiceWorkerSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    "serviceWorker" in navigator &&
+    Boolean(navigator.serviceWorker)
+  );
+}
+
+function getSafeMessaging() {
+  if (!isServiceWorkerSupported()) return null;
+  try {
+    return getMessaging(app);
+  } catch (err) {
+    console.warn("[FCM] Firebase messaging initialization skipped:", err);
+    return null;
+  }
+}
+
+export const messaging = getSafeMessaging();
 
 /** Request permission + get FCM token for this device */
 export async function requestPushPermission(): Promise<string | null> {
-  if (!messaging) return null;
+  const msgInstance = messaging || getSafeMessaging();
+  if (!msgInstance || !isServiceWorkerSupported()) return null;
   try {
+    if (typeof Notification === "undefined") return null;
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
 
-    const token = await getToken(messaging, {
+    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    const token = await getToken(msgInstance, {
       vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: await navigator.serviceWorker.register("/firebase-messaging-sw.js"),
+      serviceWorkerRegistration: registration,
     });
     return token || null;
   } catch (err) {

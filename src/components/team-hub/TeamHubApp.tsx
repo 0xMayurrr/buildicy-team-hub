@@ -63,7 +63,7 @@ import { Avatar, FollowUp, MetricCard, PageTitle, SectionHeading, StatusPill, fo
 export { formatMoney };
 import { LoginPage } from "./LoginPage";
 import { HubStore, useHubState } from "@/lib/supabase/store";
-import type { Lead, LeadStatus, LeadPotential, UserProfile, UserRole, ChatMessage, LeadDiscussion } from "@/lib/supabase/types";
+import type { Lead, LeadStatus, LeadPotential, UserProfile, UserRole, ChatMessage, LeadDiscussion, TechTask } from "@/lib/supabase/types";
 import { ReportsView } from "./ReportsView";
 import { OutreachDialog } from "./OutreachDialog";
 import { MemberUpdates } from "./MemberUpdates";
@@ -71,6 +71,7 @@ import { MemberProfileModal } from "./MemberProfileModal";
 import { TeamChat } from "./TeamChat";
 import { AvatarPickerModal } from "./AvatarPickerModal";
 import { GeminiAgent } from "./GeminiAgent";
+import { TechMemberUpdates, AssignedProjectsSection } from "./TechMemberUpdates";
 import {
   WORKING_STATUS_CONFIG,
   LEAD_POTENTIAL_CONFIG,
@@ -79,7 +80,7 @@ import {
   getLeadPotentialConfig,
 } from "./performance-constants";
 
-export type View = "founder" | "member" | "leads" | "lead" | "reports" | "chat" | "notifications" | "team";
+export type View = "founder" | "member" | "techie" | "leads" | "lead" | "reports" | "chat" | "notifications" | "team";
 const statuses: LeadStatus[] = ["New", "Contacted", "Qualified", "Proposal", "Won", "Lost"];
 
 export function getTimeBasedGreeting(): string {
@@ -143,10 +144,11 @@ export function TeamHubApp() {
   useEffect(() => {
     if (currentUser) {
       if (currentUser.role === "founder") {
-        setView((prev) => (prev === "member" ? "founder" : prev));
+        setView((prev) => (prev === "member" || prev === "techie" ? "founder" : prev));
+      } else if (currentUser.role === "techie") {
+        setView((prev) => (["founder", "team", "member"] as View[]).includes(prev) ? "techie" : prev);
       } else {
-        // Enforce RBAC: Team members cannot view founder or team views
-        setView((prev) => (prev === "founder" || prev === "team" ? "member" : prev));
+        setView((prev) => (prev === "founder" || prev === "team" || prev === "techie" ? "member" : prev));
       }
     }
   }, [currentUser]);
@@ -204,7 +206,9 @@ export function TeamHubApp() {
     return (
       <LoginPage
         onLoginSuccess={(user) => {
-          setView(user.role === "founder" ? "founder" : "member");
+          if (user.role === "founder") setView("founder");
+          else if (user.role === "techie") setView("techie");
+          else setView("member");
         }}
       />
     );
@@ -213,17 +217,17 @@ export function TeamHubApp() {
   const selected = leads.find((lead) => lead.id === selectedId) ?? leads[0];
 
   const go = (next: View) => {
-    if (currentUser.role === "founder" && next === "member") {
+    if (currentUser.role === "founder" && (next === "member" || next === "techie")) {
       setView("founder");
-    } else if (currentUser.role === "member" && (next === "founder" || next === "team")) {
+    } else if (currentUser.role === "techie" && (["founder", "team", "member"] as View[]).includes(next)) {
+      setView("techie");
+    } else if (currentUser.role === "member" && (next === "founder" || next === "team" || next === "techie")) {
       setView("member");
     } else {
       setView(next);
     }
     setMobileNav(false);
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0 });
-    }
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   };
 
   const openLead = (id: string) => {
@@ -247,6 +251,12 @@ export function TeamHubApp() {
           { id: "notifications" as View, label: "Notifications", icon: Bell, count: unreadCount > 0 ? unreadCount : undefined },
           { id: "team" as View, label: "Team management", icon: Users },
           { id: "appointments" as any, label: "Appointments", icon: CalendarClock, isExternal: true, href: "https://calendar.buildicy.com/" },
+        ]
+      : currentUser.role === "techie"
+      ? [
+          { id: "techie" as View, label: "My workspace", icon: BriefcaseBusiness },
+          { id: "chat" as View, label: "Team chat", icon: MessageCircle },
+          { id: "notifications" as View, label: "Notifications", icon: Bell, count: unreadCount > 0 ? unreadCount : undefined },
         ]
       : [
           { id: "member" as View, label: "My workspace", icon: BriefcaseBusiness },
@@ -281,7 +291,7 @@ export function TeamHubApp() {
           <h2>{currentUser.name} 👋</h2>
           <span style={{ fontSize: "11px", color: "var(--muted-foreground)", display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "oklch(0.6 0.18 150)" }}></span>
-            {currentUser.role === "founder" ? "Founder & CEO" : `${currentUser.title} (${currentUser.department})`}
+            {currentUser.role === "founder" ? "Founder & CEO" : currentUser.role === "techie" ? `${currentUser.title} (Tech Team)` : `${currentUser.title} (${currentUser.department})`}
           </span>
         </div>
         <nav className="hub-nav" aria-label="Main navigation">
@@ -428,6 +438,7 @@ export function TeamHubApp() {
               {unreadCount > 0 && <i />}
             </button>
             <button
+              type="button"
               className="round-action desktop-only"
               aria-label="Settings"
               title="Workspace & Account Settings"
@@ -435,7 +446,7 @@ export function TeamHubApp() {
             >
               <Settings />
             </button>
-            {currentUser.role !== "founder" && (
+            {currentUser.role !== "founder" && currentUser.role !== "techie" && (
               <Button className="primary-pill desktop-only" onClick={() => setAddOpen(true)}>
                 <Plus />
                 New lead
@@ -452,7 +463,7 @@ export function TeamHubApp() {
                 )}
                 <span>
                   <strong>{currentUser.name}</strong>
-                  <small>{currentUser.role === "founder" ? "Founder & CEO" : currentUser.title}</small>
+                  <small>{currentUser.role === "founder" ? "Founder & CEO" : currentUser.role === "techie" ? `${currentUser.title} · Tech` : currentUser.title}</small>
                 </span>
                 <ChevronDown />
               </DropdownMenuTrigger>
@@ -464,7 +475,10 @@ export function TeamHubApp() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                <DropdownMenuItem
+                  onSelect={() => setSettingsOpen(true)}
+                  onClick={() => setSettingsOpen(true)}
+                >
                   <Settings style={{ width: "14px", height: "14px", marginRight: "6px", color: "var(--primary)" }} />
                   Settings & Preferences
                 </DropdownMenuItem>
@@ -499,6 +513,13 @@ export function TeamHubApp() {
                     <DropdownMenuSeparator />
                   </>
                 )}
+                {currentUser.role === "techie" && (
+                  <>
+                    <DropdownMenuItem onClick={() => go("techie")}>My workspace</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => go("chat")}>Team chat</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {currentUser.role === "member" && (
                   <>
                     <DropdownMenuItem onClick={() => go("member")}>My workspace</DropdownMenuItem>
@@ -517,10 +538,13 @@ export function TeamHubApp() {
         </header>
 
         <div className="hub-canvas">
+          {view === "techie" && (
+            <TechieDashboard currentUser={currentUser} />
+          )}
           {view === "founder" && currentUser.role === "founder" && (
             <FounderDashboard leads={leads} openLead={openLead} go={go} users={users} />
           )}
-          {view === "member" && (
+          {view === "member" && currentUser.role === "member" && (
             <MemberDashboard
               leads={leads}
               openLead={openLead}
@@ -562,12 +586,12 @@ export function TeamHubApp() {
             <Notifications openLead={openLead} notifications={notifications} currentUser={currentUser} go={go} />
           )}
           {view === "team" && currentUser.role === "founder" && (
-            <TeamManagement users={users} />
+            <TeamManagement users={users} currentUser={currentUser} />
           )}
         </div>
       </main>
 
-      {currentUser && currentUser.role !== "founder" && (
+      {currentUser && currentUser.role !== "founder" && currentUser.role !== "techie" && (
         <AddLeadDialog
           open={addOpen}
           onOpenChange={setAddOpen}
@@ -581,7 +605,7 @@ export function TeamHubApp() {
         />
       )}
 
-      {mounted && currentUser && currentUser.role !== "founder" && (
+      {mounted && currentUser && currentUser.role !== "founder" && currentUser.role !== "techie" && (
         <AvatarPickerModal
           open={isAvatarCompulsory || avatarPickerOpen}
           currentUser={currentUser}
@@ -663,7 +687,7 @@ function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="hub-dialog" style={{ maxWidth: "540px", maxHeight: "90vh", overflowY: "auto" }}>
+      <DialogContent className="hub-dialog" style={{ maxWidth: "540px", maxHeight: "90vh", overflowY: "auto", zIndex: 120 }}>
         <DialogHeader>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Settings style={{ width: "20px", height: "20px", color: "var(--primary)" }} />
@@ -1099,7 +1123,10 @@ function FounderDashboard({
         </div>
       </section>
 
-      {/* 3. Recent Activity & Follow-ups Due Row */}
+      {/* 3. Tech Team Section */}
+      <TechTeamSection users={users} />
+
+      {/* 4. Recent Activity & Follow-ups Due Row */}
       <div className="dashboard-grid">
         <section className="panel">
           <SectionHeading
@@ -1147,7 +1174,7 @@ function FounderDashboard({
                   width: "40px",
                   height: "40px",
                   borderRadius: "12px",
-                  background: "#0f0f11",
+                  background: "var(--primary)",
                   color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
@@ -1195,12 +1222,12 @@ function FounderDashboard({
                       <span style={{ fontSize: "11.5px", color: "var(--muted-foreground)" }}>
                         {displayCompany} · Host: <strong>{m.userName}</strong>
                       </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "#0f0f11", marginTop: "4px", fontWeight: 500 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11.5px", color: "var(--primary)", marginTop: "4px", fontWeight: 500 }}>
                         <Clock size={12} />
                         <span>{new Date(m.createdAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                     </div>
-                    <span style={{ fontSize: "11.5px", color: "#0f0f11", fontWeight: 600 }}>Open ↗</span>
+                    <span style={{ fontSize: "11.5px", color: "var(--primary)", fontWeight: 600 }}>Open ↗</span>
                   </div>
                 );
               })
@@ -1247,6 +1274,346 @@ function FounderDashboard({
         onOpenChange={(open) => !open && setInspectedMember(null)}
         openLead={openLead}
       />
+    </>
+  );
+}
+
+function TechTeamSection({ users }: { users: UserProfile[] }) {
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [selectedTechie, setSelectedTechie] = useState<UserProfile | null>(null);
+  const [, setVersion] = useState(0);
+
+  const techies = users.filter((u) => u.role === "techie");
+  const allTechTasks = HubStore.getTechTasks();
+  const allTechUpdates = HubStore.getTechDailyUpdates();
+  const today = new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    const refresh = () => setVersion((v) => v + 1);
+    window.addEventListener("buildicy_storage_update", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("buildicy_storage_update", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
+  if (techies.length === 0) return null;
+
+  const TASK_STATUS_COLORS: Record<string, string> = {
+    Pending: "oklch(0.6 0.08 60)",
+    "In Progress": "oklch(0.55 0.2 260)",
+    "In Review": "oklch(0.55 0.18 200)",
+    Done: "oklch(0.5 0.18 150)",
+    Blocked: "oklch(0.55 0.22 25)",
+  };
+  const TASK_STATUS_BG: Record<string, string> = {
+    Pending: "oklch(0.97 0.02 60)",
+    "In Progress": "oklch(0.95 0.04 260)",
+    "In Review": "oklch(0.95 0.04 200)",
+    Done: "oklch(0.95 0.04 150)",
+    Blocked: "oklch(0.96 0.04 25)",
+  };
+
+  return (
+    <section className="panel" style={{ padding: "20px 24px", marginBottom: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+        <div>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Tech Team Overview</h2>
+          <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "4px 0 0" }}>
+            Assigned tasks, daily updates and live status of your tech members.
+          </p>
+        </div>
+        <Button className="primary-pill" size="sm" onClick={() => { setSelectedTechie(techies[0] ?? null); setAssignOpen(true); }}>
+          <Plus size={13} style={{ marginRight: "6px" }} />
+          Assign Task
+        </Button>
+      </div>
+
+      <div className="member-perf-grid">
+        {techies.map((techie) => {
+          const tasks = allTechTasks.filter((t) => t.assignedTo === techie.id);
+          const todayUpdate = allTechUpdates.find((u) => u.userId === techie.id && u.date === today);
+          const doneTasks = tasks.filter((t) => t.status === "Done").length;
+          const blockedTasks = tasks.filter((t) => t.status === "Blocked").length;
+          const avgPct = tasks.length > 0 ? Math.round(tasks.reduce((s, t) => s + t.progressPct, 0) / tasks.length) : 0;
+
+          return (
+            <div key={techie.id} className="member-perf-card">
+              <div className="member-perf-header">
+                <div className="member-perf-info">
+                  <Avatar initials={techie.initials} color={techie.color} size="md" avatarUrl={techie.avatarUrl} />
+                  <div>
+                    <strong style={{ fontSize: "13px", display: "block" }}>{techie.name}</strong>
+                    <span style={{ fontSize: "11px", color: "var(--muted-foreground)" }}>{techie.title}</span>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    padding: "3px 8px",
+                    borderRadius: "999px",
+                    background: "oklch(0.95 0.04 260)",
+                    color: "oklch(0.45 0.2 260)",
+                    fontWeight: 700,
+                  }}
+                >
+                  Tech
+                </span>
+              </div>
+
+              <div className="member-perf-stats-row">
+                <div className="member-perf-stat-item"><span>Tasks</span><strong>{tasks.length}</strong></div>
+                <div className="member-perf-stat-item"><span>Done</span><strong style={{ color: "oklch(0.5 0.18 150)" }}>{doneTasks}</strong></div>
+                <div className="member-perf-stat-item"><span>Blocked</span><strong style={{ color: blockedTasks > 0 ? "oklch(0.55 0.22 25)" : "var(--foreground)" }}>{blockedTasks}</strong></div>
+                <div className="member-perf-stat-item"><span>Avg Progress</span><strong style={{ color: "var(--primary)" }}>{avgPct}%</strong></div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ margin: "8px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px" }}>
+                  <span style={{ color: "var(--muted-foreground)" }}>Overall task progress</span>
+                  <strong style={{ color: "var(--primary)" }}>{avgPct}%</strong>
+                </div>
+                <div style={{ width: "100%", height: "5px", background: "var(--muted)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ width: `${avgPct}%`, height: "100%", background: "var(--primary)", borderRadius: "3px" }} />
+                </div>
+              </div>
+
+              {/* Today's update */}
+              {todayUpdate ? (
+                <div style={{ padding: "8px 10px", borderRadius: "8px", background: "color-mix(in oklab, var(--primary) 6%, var(--card))", border: "1px solid color-mix(in oklab, var(--primary) 18%, transparent)", fontSize: "11.5px", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <strong>Today's update</strong>
+                    <span style={{ color: "var(--primary)", fontWeight: 700 }}>{todayUpdate.overallProgressPct}% overall</span>
+                  </div>
+                  <p style={{ margin: 0, color: "var(--foreground)", lineHeight: 1.4 }}>{todayUpdate.whatIWorkedOn.slice(0, 100)}{todayUpdate.whatIWorkedOn.length > 100 ? "..." : ""}</p>
+                  {todayUpdate.blockers && (
+                    <p style={{ margin: "4px 0 0", color: "oklch(0.55 0.22 25)", fontSize: "11px" }}>
+                      ⚠️ Blocker: {todayUpdate.blockers.slice(0, 80)}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding: "6px 10px", borderRadius: "8px", background: "oklch(0.97 0.02 60)", fontSize: "11px", color: "oklch(0.55 0.12 60)", marginBottom: "8px", fontWeight: 600 }}>
+                  ⏳ No daily update submitted today
+                </div>
+              )}
+
+              {/* Recent tasks */}
+              {tasks.slice(0, 2).map((task) => (
+                <div key={task.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderTop: "1px solid var(--border)", fontSize: "11.5px" }}>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.title}</span>
+                  <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "999px", background: TASK_STATUS_BG[task.status] ?? "var(--muted)", color: TASK_STATUS_COLORS[task.status] ?? "var(--foreground)", fontWeight: 600, marginLeft: "6px", flexShrink: 0 }}>
+                    {task.status}
+                  </span>
+                </div>
+              ))}
+
+              <Button
+                variant="outline"
+                size="sm"
+                style={{ width: "100%", marginTop: "8px", fontSize: "11px", height: "28px" }}
+                onClick={() => { setSelectedTechie(techie); setAssignOpen(true); }}
+              >
+                <Plus size={11} style={{ marginRight: "4px" }} />
+                Assign Task to {techie.name}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Assign Task Dialog */}
+      {assignOpen && (
+        <AssignTechTaskDialog
+          open={assignOpen}
+          onOpenChange={setAssignOpen}
+          techies={techies}
+          defaultTechie={selectedTechie}
+        />
+      )}
+    </section>
+  );
+}
+
+function AssignTechTaskDialog({
+  open,
+  onOpenChange,
+  techies,
+  defaultTechie,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  techies: UserProfile[];
+  defaultTechie: UserProfile | null;
+}) {
+  const currentUser = HubStore.getCurrentUser();
+  const [selectedTechieId, setSelectedTechieId] = useState(defaultTechie?.id ?? techies[0]?.id ?? "");
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const techie = techies.find((t) => t.id === selectedTechieId);
+    if (!techie || !currentUser) return;
+
+    HubStore.assignTechTask({
+      assignedTo: techie.id,
+      assignedToName: techie.name,
+      assignedBy: currentUser.id,
+      assignedByName: currentUser.name,
+      title: String(fd.get("title") || "").trim(),
+      description: String(fd.get("description") || "").trim(),
+      priority: (String(fd.get("priority") || "Medium")) as TechTask["priority"],
+      dueDate: String(fd.get("dueDate") || "").trim() || undefined,
+      documentUrl: String(fd.get("documentUrl") || "").trim() || undefined,
+      documentName: String(fd.get("documentName") || "").trim() || undefined,
+    });
+
+    toast.success(`Task assigned to ${techie.name}! They've been notified.`);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="hub-dialog" style={{ maxWidth: "520px" }}>
+        <DialogHeader>
+          <DialogTitle>Assign Task to Tech Member</DialogTitle>
+          <DialogDescription>The techie will be notified immediately with full task details.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="lead-form">
+          <label style={{ gridColumn: "1 / -1" }}>
+            Assign to
+            <select value={selectedTechieId} onChange={(e) => setSelectedTechieId(e.target.value)}>
+              {techies.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.title})</option>)}
+            </select>
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            Task Title
+            <Input name="title" required placeholder="e.g. Build authentication module" />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            Description
+            <Textarea name="description" rows={2} placeholder="Detailed task description, requirements, acceptance criteria..." />
+          </label>
+          <label>
+            Priority
+            <select name="priority" defaultValue="Medium">
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </label>
+          <label>
+            Due Date
+            <Input name="dueDate" type="date" />
+          </label>
+          <label>
+            Reference Doc Name
+            <Input name="documentName" placeholder="e.g. Design Brief v2.pdf" />
+          </label>
+          <label>
+            Reference Doc URL / Link
+            <Input name="documentUrl" placeholder="https://drive.google.com/..." />
+          </label>
+          <DialogFooter className="form-footer" style={{ gridColumn: "1 / -1" }}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" className="primary-pill">Assign Task</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TechieDashboard({ currentUser }: { currentUser: UserProfile }) {
+  const myTasks = HubStore.getTechTasks({ assignedTo: currentUser.id });
+  const pendingTasks = myTasks.filter((t) => t.status !== "Done");
+  const doneTasks = myTasks.filter((t) => t.status === "Done");
+  const avgProgress = myTasks.length > 0
+    ? Math.round(myTasks.reduce((s, t) => s + t.progressPct, 0) / myTasks.length)
+    : 0;
+
+  const todayFormatted = new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+
+  const TASK_STATUS_COLORS: Record<string, string> = {
+    Pending: "oklch(0.6 0.08 60)",
+    "In Progress": "oklch(0.55 0.2 260)",
+    "In Review": "oklch(0.55 0.18 200)",
+    Done: "oklch(0.5 0.18 150)",
+    Blocked: "oklch(0.55 0.22 25)",
+  };
+  const TASK_STATUS_BG: Record<string, string> = {
+    Pending: "oklch(0.97 0.02 60)",
+    "In Progress": "oklch(0.95 0.04 260)",
+    "In Review": "oklch(0.95 0.04 200)",
+    Done: "oklch(0.95 0.04 150)",
+    Blocked: "oklch(0.96 0.04 25)",
+  };
+
+  return (
+    <>
+      <PageTitle
+        eyebrow={`${currentUser.name}'s Workspace · ${todayFormatted}`}
+        title="My Tech Workspace"
+        description="Your assigned tasks, daily progress updates and team communication."
+      />
+
+      <AssignedProjectsSection currentUser={currentUser} />
+
+      <TechMemberUpdates currentUser={currentUser} />
+
+      {/* Stats row */}
+      <div className="metrics-grid" style={{ marginBottom: "24px" }}>
+        <MetricCard label="Assigned Tasks" value={String(myTasks.length)} change={`${doneTasks.length} done`} footnote={`${pendingTasks.length} pending`} icon={<Target />} />
+        <MetricCard label="Avg Progress" value={`${avgProgress}%`} change="Across all tasks" footnote="Updated live" icon={<TrendingUp />} />
+        <MetricCard label="Blocked Tasks" value={String(myTasks.filter((t) => t.status === "Blocked").length)} change="Need attention" footnote="Report to founder" icon={<AlertCircle />} />
+      </div>
+
+      {/* Task list */}
+      <section className="panel" style={{ padding: "20px 24px" }}>
+        <SectionHeading title="My Assigned Tasks" detail="Tasks assigned by the founder" />
+        {myTasks.length === 0 ? (
+          <p style={{ fontSize: "13px", color: "var(--muted-foreground)", padding: "16px 0", textAlign: "center" }}>
+            No tasks assigned yet. Check back soon or message the founder.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px" }}>
+            {myTasks.map((task) => (
+              <div key={task.id} style={{ padding: "14px 16px", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--background)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                  <div>
+                    <strong style={{ fontSize: "13.5px" }}>{task.title}</strong>
+                    {task.dueDate && (
+                      <span style={{ marginLeft: "8px", fontSize: "11px", color: "var(--muted-foreground)" }}>
+                        <Clock size={10} style={{ display: "inline", marginRight: "3px" }} />
+                        Due: {task.dueDate}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "999px", background: task.priority === "Urgent" ? "oklch(0.96 0.04 25)" : task.priority === "High" ? "oklch(0.96 0.04 45)" : "oklch(0.96 0.04 260)", color: task.priority === "Urgent" ? "oklch(0.5 0.2 25)" : task.priority === "High" ? "oklch(0.5 0.18 45)" : "oklch(0.5 0.18 260)", fontWeight: 600 }}>
+                      {task.priority}
+                    </span>
+                    <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "999px", background: TASK_STATUS_BG[task.status] ?? "var(--muted)", color: TASK_STATUS_COLORS[task.status] ?? "var(--foreground)", fontWeight: 600 }}>
+                      {task.status}
+                    </span>
+                  </div>
+                </div>
+                {task.description && <p style={{ fontSize: "12px", color: "var(--muted-foreground)", margin: "0 0 8px" }}>{task.description}</p>}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ flex: 1, height: "6px", background: "var(--muted)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ width: `${task.progressPct}%`, height: "100%", background: task.progressPct >= 100 ? "oklch(0.5 0.18 150)" : "var(--primary)", borderRadius: "3px" }} />
+                  </div>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--primary)", minWidth: "32px" }}>{task.progressPct}%</span>
+                </div>
+                {task.techieNote && <p style={{ fontSize: "11.5px", color: "var(--muted-foreground)", marginTop: "6px", fontStyle: "italic" }}>"{task.techieNote}"</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }
@@ -1679,7 +2046,7 @@ function LeadsView({
                     aria-label="Select all leads"
                     checked={isAllSelected}
                     onChange={handleToggleAll}
-                    style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "#0f0f11" }}
+                    style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "var(--primary)" }}
                   />
                 </th>
                 <th>Lead</th>
@@ -1702,7 +2069,7 @@ function LeadsView({
                   <tr
                     key={l.id}
                     onClick={() => openLead(l.id)}
-                    style={{ background: isSelected ? "rgba(15, 15, 17, 0.05)" : undefined, cursor: "pointer" }}
+                    style={{ background: isSelected ? "color-mix(in oklab, var(--primary) 8%, transparent)" : undefined, cursor: "pointer" }}
                   >
                     <td style={{ textAlign: "center", padding: "0 8px" }} onClick={(e) => e.stopPropagation()}>
                       <input
@@ -1710,7 +2077,7 @@ function LeadsView({
                         aria-label={`Select lead ${l.name}`}
                         checked={isSelected}
                         onChange={(e) => handleToggleOne(l.id, e as any)}
-                        style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "#0f0f11" }}
+                        style={{ cursor: "pointer", width: "15px", height: "15px", accentColor: "var(--primary)" }}
                       />
                     </td>
                     <td>
@@ -1739,7 +2106,7 @@ function LeadsView({
                             width: "7px",
                             height: "7px",
                             borderRadius: "50%",
-                            background: l.ownerId === currentUser.id ? "#0f0f11" : "#71717a",
+                            background: l.ownerId === currentUser.id ? "var(--primary)" : "#71717a",
                           }}
                         />
                         {l.ownerName}
@@ -2738,29 +3105,51 @@ function Notifications({
   );
 }
 
-function TeamManagement({ users }: { users: UserProfile[] }) {
+function TeamManagement({ users, currentUser }: { users: UserProfile[]; currentUser: UserProfile }) {
+  const [activeTab, setActiveTab] = useState<"marketing" | "tech">("marketing");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createRole, setCreateRole] = useState<"member" | "techie">("member");
   const [showMemberPass, setShowMemberPass] = useState(false);
   const [editingMember, setEditingMember] = useState<UserProfile | null>(null);
   const [reassignMember, setReassignMember] = useState<UserProfile | null>(null);
   const [targetOwnerId, setTargetOwnerId] = useState<string>("");
   const leads = HubStore.getLeads();
 
+  const marketingMembers = users.filter((u) => u.role === "member");
+  const techMembers = users.filter((u) => u.role === "techie");
+  const displayedMembers = activeTab === "marketing" ? marketingMembers : techMembers;
+
   return (
     <>
       <PageTitle
         eyebrow="Workspace"
         title="Team management"
-        description="Create new team members, manage roles and configure access credentials."
+        description="Create and manage marketing and tech team members."
         action={
-          <Button className="primary-pill" onClick={() => setCreateOpen(true)}>
-            <UserPlus />
-            Create member
-          </Button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button variant="outline" onClick={() => { setCreateRole("member"); setCreateOpen(true); }}>
+              <UserPlus size={14} style={{ marginRight: "6px" }} />
+              Add Marketing Member
+            </Button>
+            <Button className="primary-pill" onClick={() => { setCreateRole("techie"); setCreateOpen(true); }}>
+              <UserPlus size={14} style={{ marginRight: "6px" }} />
+              Add Tech Member
+            </Button>
+          </div>
         }
       />
+
+      <div className="segmented" style={{ marginBottom: "20px", width: "fit-content" }}>
+        <button className={activeTab === "marketing" ? "active" : ""} onClick={() => setActiveTab("marketing")}>
+          Marketing Team ({marketingMembers.length})
+        </button>
+        <button className={activeTab === "tech" ? "active" : ""} onClick={() => setActiveTab("tech")}>
+          Tech Team ({techMembers.length})
+        </button>
+      </div>
+
       <div className="team-grid">
-        {users.map((m) => {
+        {displayedMembers.map((m) => {
           const userLeads = leads.filter((l) => l.ownerId === m.id || l.ownerName === m.name);
           return (
             <article className="member-card" key={m.id || m.email}>
@@ -2838,13 +3227,15 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
         })}
       </div>
 
-      {/* Founder: Create New Team Member Modal */}
+      {/* Create Member Modal */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="hub-dialog" style={{ maxWidth: "520px" }}>
           <DialogHeader>
-            <DialogTitle>Create New Team Member</DialogTitle>
+            <DialogTitle>{createRole === "techie" ? "Add Tech Team Member" : "Add Marketing Team Member"}</DialogTitle>
             <DialogDescription>
-              Set up credentials so the new member can log in and access leads, outreach and channels.
+              {createRole === "techie"
+                ? "Tech members see tasks, daily updates and team chat — no leads or pipeline."
+                : "Marketing members manage leads, outreach and pipeline."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -2856,72 +3247,60 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
               const email = String(d.get("email") || "").trim().toLowerCase();
               const pass = String(d.get("pass") || "").trim();
               const title = String(d.get("title") || "").trim();
-              const department = String(d.get("department") || "Marketing").trim();
-
-              if (!name || !email || !pass) {
-                toast.error("Please fill in name, email and password.");
-                return;
-              }
-
+              const department = String(d.get("department") || (createRole === "techie" ? "Engineering" : "Marketing")).trim();
+              if (!name || !email || !pass) { toast.error("Please fill in name, email and password."); return; }
               const existing = users.find((u) => u.email.toLowerCase() === email);
-              if (existing) {
-                toast.error(`A member with email ${email} already exists.`);
-                return;
-              }
-
-              const newUser = HubStore.createUser({
-                name,
-                email,
-                pass,
-                title: title || "Marketing Specialist",
-                department,
-              });
-
-              toast.success(`Account created for ${newUser.name}! They can now log in with ${email}.`);
+              if (existing) { toast.error(`A member with email ${email} already exists.`); return; }
+              const newUser = HubStore.createUser({ name, email, pass, title: title || (createRole === "techie" ? "Software Developer" : "Marketing Specialist"), department, role: createRole });
+              toast.success(`${createRole === "techie" ? "Tech" : "Marketing"} member ${newUser.name} created! Login: ${email}`);
               setCreateOpen(false);
             }}
           >
             <label>
               Full name
-              <Input name="name" required placeholder="e.g. Vikramaditya Rao" />
+              <Input name="name" required placeholder={createRole === "techie" ? "e.g. Arjun Dev" : "e.g. Vikramaditya Rao"} />
             </label>
             <label>
-              Work email address
-              <Input name="email" type="email" required placeholder="e.g. vikram.sales@buildicy.com" />
+              Work email
+              <Input name="email" type="email" required placeholder={createRole === "techie" ? "e.g. arjun.dev@buildicy.com" : "e.g. vikram@buildicy.com"} />
             </label>
             <label>
-              Login password
+              Password
               <div style={{ position: "relative" }}>
-                <Input name="pass" type={showMemberPass ? "text" : "password"} required placeholder="Set password for member login" style={{ paddingRight: "40px" }} />
-                <button
-                  type="button"
-                  onClick={() => setShowMemberPass((v) => !v)}
-                  style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", alignItems: "center" }}
-                >
+                <Input name="pass" type={showMemberPass ? "text" : "password"} required placeholder="Set login password" style={{ paddingRight: "40px" }} />
+                <button type="button" onClick={() => setShowMemberPass((v) => !v)} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", alignItems: "center" }}>
                   {showMemberPass ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </label>
             <label>
               Job Title
-              <Input name="title" required placeholder="e.g. Outreach Specialist / Sales Lead" />
+              <Input name="title" required placeholder={createRole === "techie" ? "e.g. Frontend Developer" : "e.g. Outreach Specialist"} />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               Department
-              <select name="department" defaultValue="Marketing">
-                <option value="Marketing">Marketing</option>
-                <option value="Sales">Sales & Business Development</option>
-                <option value="Growth">Growth & Partnerships</option>
-                <option value="Operations">Operations</option>
+              <select name="department" defaultValue={createRole === "techie" ? "Engineering" : "Marketing"}>
+                {createRole === "techie" ? (
+                  <>
+                    <option value="Engineering">Engineering</option>
+                    <option value="Product">Product</option>
+                    <option value="Design">Design</option>
+                    <option value="DevOps">DevOps</option>
+                    <option value="QA">QA & Testing</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Sales">Sales & Business Development</option>
+                    <option value="Growth">Growth & Partnerships</option>
+                    <option value="Operations">Operations</option>
+                  </>
+                )}
               </select>
             </label>
             <DialogFooter className="form-footer" style={{ gridColumn: "1 / -1", marginTop: "12px" }}>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="primary-pill">
-                Create Member Account
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button type="submit" className="primary-pill">Create Account</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -2964,7 +3343,8 @@ function TeamManagement({ users }: { users: UserProfile[] }) {
               <label>
                 Role Type
                 <select name="role" defaultValue={editingMember.role}>
-                  <option value="member">Team Member</option>
+                  <option value="member">Marketing Member</option>
+                  <option value="techie">Tech Member</option>
                   <option value="founder">Founder & Executive</option>
                 </select>
               </label>

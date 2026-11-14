@@ -19,6 +19,8 @@ import type {
   LeadOutreachInteraction,
   DailyWorkUpdate,
   MemberPerformanceMetrics,
+  TechTask,
+  TechDailyUpdate,
 } from "./types";
 import { supabase, getSupabaseConfig } from "./client";
 
@@ -195,6 +197,8 @@ export const INITIAL_CHAT: Record<string, ChatMessage[]> = {};
 export const INITIAL_CHANNELS: ChatChannel[] = [];
 
 export const INITIAL_TASKS: Record<string, DailyTask[]> = {};
+export const INITIAL_TECH_TASKS: TechTask[] = [];
+export const INITIAL_TECH_UPDATES: TechDailyUpdate[] = [];
 
 // Automatic one-time wipe of old mock data in client browser
 if (typeof window !== "undefined") {
@@ -219,6 +223,8 @@ if (typeof window !== "undefined") {
     localStorage.setItem("buildicy_notifications", JSON.stringify([]));
     localStorage.setItem("buildicy_discussions", JSON.stringify({}));
     localStorage.setItem("buildicy_tasks", JSON.stringify({}));
+    localStorage.setItem("buildicy_tech_tasks", JSON.stringify([]));
+    localStorage.setItem("buildicy_tech_updates", JSON.stringify([]));
     localStorage.setItem("buildicy_chat", JSON.stringify({}));
     localStorage.setItem("buildicy_channels", JSON.stringify([]));
     localStorage.setItem("buildicy_users", JSON.stringify(INITIAL_USERS));
@@ -525,6 +531,7 @@ export const HubStore = {
     pass: string;
     title: string;
     department?: string;
+    role?: UserRole;
   }): UserProfile => {
     const allUsers = HubStore.getUsers();
     const cleanEmail = data.email.trim().toLowerCase();
@@ -551,7 +558,7 @@ export const HubStore = {
       id,
       email: cleanEmail,
       name: data.name.trim(),
-      role: "member",
+      role: data.role || "member",
       title: data.title.trim() || "Marketing Specialist",
       department: data.department?.trim() || "Marketing",
       initials,
@@ -568,7 +575,7 @@ export const HubStore = {
     const custom = getStored<Record<string, any>>("buildicy_custom_credentials", {});
     custom[cleanEmail] = {
       pass: data.pass.trim(),
-      role: "member",
+      role: data.role || "member",
       name: newUser.name,
       initials: newUser.initials,
       color: newUser.color,
@@ -593,7 +600,7 @@ export const HubStore = {
           id: newUser.id,
           email: newUser.email,
           full_name: newUser.name,
-          role: "member",
+          role: data.role || "member",
           title: newUser.title,
           department: newUser.department,
           initials: newUser.initials,
@@ -612,7 +619,7 @@ export const HubStore = {
         // Register in Supabase Auth
         await supabase.signUp(cleanEmail, data.pass.trim(), {
           name: newUser.name,
-          role: "member",
+          role: data.role || "member",
         });
       } catch (err) {
         console.warn("Supabase user creation sync:", err);
@@ -1030,6 +1037,51 @@ export const HubStore = {
         if (hasNew) {
           setStored("buildicy_users", Array.from(userMap.values()));
         }
+      }
+
+      // Sync tech tasks from Supabase
+      const remoteTechTasks = await withTimeout(supabase.select<any>("tech_tasks", "order=created_at.desc") as Promise<any[]>);
+      if (remoteTechTasks && remoteTechTasks.length > 0) {
+        const mappedTechTasks: TechTask[] = remoteTechTasks.map((t: any) => ({
+          id: t.id,
+          assignedTo: t.assigned_to,
+          assignedToName: t.assigned_to_name,
+          assignedBy: t.assigned_by,
+          assignedByName: t.assigned_by_name,
+          title: t.title,
+          description: t.description || "",
+          priority: t.priority as TechTask["priority"],
+          dueDate: t.due_date || undefined,
+          status: t.status as TechTask["status"],
+          progressPct: Number(t.progress_pct) || 0,
+          techieNote: t.techie_note || "",
+          documentUrl: t.document_url || "",
+          documentName: t.document_name || "",
+          createdAt: t.created_at,
+          updatedAt: t.updated_at,
+        }));
+        setStored("buildicy_tech_tasks", mappedTechTasks);
+      }
+
+      // Sync tech daily updates from Supabase
+      const remoteTechUpdates = await withTimeout(supabase.select<any>("tech_daily_updates", "order=created_at.desc&limit=100") as Promise<any[]>);
+      if (remoteTechUpdates && remoteTechUpdates.length > 0) {
+        const mappedTechUpdates: TechDailyUpdate[] = remoteTechUpdates.map((u: any) => ({
+          id: u.id,
+          userId: u.user_id,
+          userName: u.user_name,
+          userInitials: u.user_initials,
+          userColor: u.user_color,
+          date: u.date,
+          workingStatus: u.working_status as WorkingStatus,
+          whatIWorkedOn: u.what_i_worked_on || "",
+          blockers: u.blockers || "",
+          tomorrowPlan: u.tomorrow_plan || "",
+          taskProgress: Array.isArray(u.task_progress) ? u.task_progress : [],
+          overallProgressPct: Number(u.overall_progress_pct) || 0,
+          createdAt: u.created_at,
+        }));
+        setStored("buildicy_tech_updates", mappedTechUpdates);
       }
     } catch (err) {
       console.warn("Supabase background sync:", err);
@@ -2287,6 +2339,142 @@ export const HubStore = {
     };
     all[userId] = [...userTasks, newTask];
     setStored("buildicy_tasks", all);
+  },
+
+  // ==========================================
+  // TECH TASKS
+  // ==========================================
+  getTechTasks: (filter?: { assignedTo?: string; assignedBy?: string }): TechTask[] => {
+    const all = getStored<TechTask[]>("buildicy_tech_tasks", INITIAL_TECH_TASKS);
+    if (!filter) return all;
+    return all.filter((t) => {
+      if (filter.assignedTo && t.assignedTo !== filter.assignedTo) return false;
+      if (filter.assignedBy && t.assignedBy !== filter.assignedBy) return false;
+      return true;
+    });
+  },
+
+  assignTechTask: (data: Omit<TechTask, "id" | "createdAt" | "updatedAt" | "progressPct" | "status">): TechTask => {
+    const all = getStored<TechTask[]>("buildicy_tech_tasks", INITIAL_TECH_TASKS);
+    const now = new Date().toISOString();
+    const newTask: TechTask = {
+      ...data,
+      id: `tech-task-${Date.now()}`,
+      status: "Pending",
+      progressPct: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setStored("buildicy_tech_tasks", [newTask, ...all]);
+    HubStore.addNotification({
+      title: `📋 New task assigned: ${newTask.title}`,
+      body: `From ${newTask.assignedByName} · Priority: ${newTask.priority}${newTask.dueDate ? ` · Due: ${newTask.dueDate}` : ""}`,
+      time: "Just now",
+      userId: newTask.assignedTo,
+    });
+    // Sync to Supabase
+    supabase.insert("tech_tasks", {
+      id: newTask.id,
+      assigned_to: newTask.assignedTo,
+      assigned_to_name: newTask.assignedToName,
+      assigned_by: newTask.assignedBy,
+      assigned_by_name: newTask.assignedByName,
+      title: newTask.title,
+      description: newTask.description || "",
+      priority: newTask.priority,
+      due_date: newTask.dueDate || null,
+      status: "Pending",
+      progress_pct: 0,
+      techie_note: "",
+      document_url: newTask.documentUrl || "",
+      document_name: newTask.documentName || "",
+    });
+    return newTask;
+  },
+
+  updateTechTaskStatus: (taskId: string, status: TechTask["status"], progressPct: number, techieNote?: string) => {
+    const all = getStored<TechTask[]>("buildicy_tech_tasks", INITIAL_TECH_TASKS);
+    const now = new Date().toISOString();
+    const updated = all.map((t) =>
+      t.id === taskId
+        ? { ...t, status, progressPct, techieNote: techieNote ?? t.techieNote, updatedAt: now }
+        : t,
+    );
+    setStored("buildicy_tech_tasks", updated);
+    const task = updated.find((t) => t.id === taskId);
+    if (task) {
+      HubStore.addNotification({
+        title: `🔧 Task update: ${task.title}`,
+        body: `${task.assignedToName} marked as ${status} · ${progressPct}% complete`,
+        time: "Just now",
+        userId: task.assignedBy,
+      });
+      // Sync to Supabase
+      supabase.update("tech_tasks", `id=eq.${taskId}`, {
+        status,
+        progress_pct: progressPct,
+        techie_note: techieNote ?? task.techieNote ?? "",
+        updated_at: now,
+      });
+    }
+  },
+
+  deleteTechTask: (taskId: string) => {
+    const all = getStored<TechTask[]>("buildicy_tech_tasks", INITIAL_TECH_TASKS);
+    setStored("buildicy_tech_tasks", all.filter((t) => t.id !== taskId));
+    supabase.delete("tech_tasks", `id=eq.${taskId}`);
+  },
+
+  // ==========================================
+  // TECH DAILY UPDATES
+  // ==========================================
+  getTechDailyUpdates: (userId?: string): TechDailyUpdate[] => {
+    const all = getStored<TechDailyUpdate[]>("buildicy_tech_updates", INITIAL_TECH_UPDATES);
+    if (userId) return all.filter((u) => u.userId === userId);
+    return all;
+  },
+
+  submitTechDailyUpdate: (data: Omit<TechDailyUpdate, "id" | "createdAt">): TechDailyUpdate => {
+    const all = getStored<TechDailyUpdate[]>("buildicy_tech_updates", INITIAL_TECH_UPDATES);
+    const today = new Date().toISOString().slice(0, 10);
+    const existingIdx = all.findIndex((u) => u.userId === data.userId && u.date === today);
+    const now = new Date().toISOString();
+    const newUpdate: TechDailyUpdate = {
+      ...data,
+      id: existingIdx >= 0 && all[existingIdx] ? all[existingIdx]!.id : `tech-update-${Date.now()}`,
+      date: today,
+      createdAt: now,
+    };
+    let updatedList: TechDailyUpdate[];
+    if (existingIdx >= 0) {
+      updatedList = [...all];
+      updatedList[existingIdx] = newUpdate;
+    } else {
+      updatedList = [newUpdate, ...all];
+    }
+    setStored("buildicy_tech_updates", updatedList);
+    HubStore.updateUserWorkingStatus(data.userId, data.workingStatus);
+    HubStore.addNotification({
+      title: `🛠️ ${data.userName} submitted tech daily update`,
+      body: `${data.overallProgressPct}% overall · ${data.whatIWorkedOn.slice(0, 60)}`,
+      time: "Just now",
+      userId: "all",
+    });
+    // Sync to Supabase
+    supabase.upsert("tech_daily_updates", {
+      user_id: data.userId,
+      user_name: data.userName,
+      user_initials: data.userInitials,
+      user_color: data.userColor,
+      date: newUpdate.date,
+      working_status: data.workingStatus,
+      what_i_worked_on: data.whatIWorkedOn,
+      blockers: data.blockers,
+      tomorrow_plan: data.tomorrowPlan,
+      task_progress: data.taskProgress,
+      overall_progress_pct: data.overallProgressPct,
+    }, "user_id,date");
+    return newUpdate;
   },
 };
 
