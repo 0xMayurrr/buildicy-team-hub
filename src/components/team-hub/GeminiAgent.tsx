@@ -33,6 +33,46 @@ import type {
   ProspectResponse,
 } from "@/lib/supabase/types";
 
+export function BuildicyAiLogo({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+      style={{ flexShrink: 0, display: "block" }}
+    >
+      <defs>
+        <linearGradient id="bAiGrad1" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#d8b4fe" />
+          <stop offset="38%" stopColor="#a855f7" />
+          <stop offset="78%" stopColor="#7c3aed" />
+          <stop offset="100%" stopColor="#4f46e5" />
+        </linearGradient>
+        <linearGradient id="bAiGrad2" x1="15" y1="2" x2="22" y2="9" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f472b6" />
+          <stop offset="100%" stopColor="#c084fc" />
+        </linearGradient>
+      </defs>
+      {/* Primary 4-point faceted diamond spark */}
+      <path
+        d="M12 2C12 7.523 7.523 12 2 12C7.523 12 12 16.477 12 22C12 16.477 16.477 12 22 12C16.477 12 12 7.523 12 2Z"
+        fill="url(#bAiGrad1)"
+      />
+      {/* Dynamic secondary sparkle */}
+      <path
+        d="M19 2.5C19 4.433 17.433 6 15.5 6C17.433 6 19 7.567 19 9.5C19 7.567 20.567 6 22.5 6C20.567 6 19 4.433 19 2.5Z"
+        fill="url(#bAiGrad2)"
+      />
+      {/* Subtle tertiary micro-gem */}
+      <circle cx="6" cy="18" r="1.5" fill="#f3e8ff" opacity="0.9" />
+    </svg>
+  );
+}
+
 export interface GeminiAgentProps {
   currentUser: UserProfile;
   onOpenLead?: (id: string) => void;
@@ -994,14 +1034,14 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
           className="buildicy-ai-fab"
           onClick={() => setOpen(true)}
           aria-label="Open Buildicy AI"
-          title="Buildicy AI Copilot"
+          title="Buildicy AI Workspace Copilot"
         >
           <div className="fab-brand-wrap">
-            <img src="/buildicy-mark.png" alt="Buildicy AI" className="fab-logo" />
+            <BuildicyAiLogo size={17} />
             <span className="fab-online-dot" />
           </div>
           <span className="fab-text">Buildicy AI</span>
-          <span className="fab-pill">{isFounder ? "Master" : "Copilot"}</span>
+          <span className="fab-pill">{isFounder ? "Master" : isTechie ? "Tech" : "Copilot"}</span>
         </button>
       )}
 
@@ -1016,7 +1056,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
           <div className="ai-header">
             <div className="ai-header-left">
               <div className="ai-mark-box">
-                <img src="/buildicy-mark.png" alt="Buildicy" className="ai-header-logo" />
+                <BuildicyAiLogo size={20} />
                 <span className="ai-pulse-dot" />
               </div>
               <div className="ai-title-block">
@@ -1071,7 +1111,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                   <div key={idx} className={`ai-message-row ${m.role}`}>
                     {m.role === "assistant" && (
                       <div className="ai-avatar-cell">
-                        <img src="/buildicy-mark.png" alt="Buildicy AI" className="ai-avatar-img" />
+                        <BuildicyAiLogo size={16} />
                       </div>
                     )}
 
@@ -1223,7 +1263,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                 {loading && (
                   <div className="ai-message-row assistant">
                     <div className="ai-avatar-cell">
-                      <img src="/buildicy-mark.png" alt="Buildicy AI" className="ai-avatar-img spin-subtle" />
+                      <BuildicyAiLogo size={16} className="spin-subtle" />
                     </div>
                     <div className="ai-bubble assistant">
                       <div className="ai-typing-indicator">
@@ -1237,7 +1277,7 @@ export function GeminiAgent({ currentUser, onOpenLead, onNavigate }: GeminiAgent
                 {isParsingFile && (
                   <div className="ai-message-row assistant">
                     <div className="ai-avatar-cell">
-                      <img src="/buildicy-mark.png" alt="Buildicy AI" className="ai-avatar-img" />
+                      <BuildicyAiLogo size={16} className="spin-subtle" />
                     </div>
                     <div className="ai-bubble assistant">
                       <div className="ai-typing-indicator">
